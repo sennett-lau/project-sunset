@@ -4,9 +4,10 @@
 mod commands;
 mod events;
 
+use std::sync::Arc;
 use std::time::Duration;
 
-use sunset_core::{AppIdentity, Sunset, SunsetConfig, mock};
+use sunset_core::{AppIdentity, KeychainSecretStore, Sunset, SunsetConfig};
 use tauri::Manager;
 use tauri_specta::{Builder, ErrorHandlingMode, collect_commands, collect_events};
 
@@ -29,6 +30,12 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::graph,
             commands::save_mode,
             commands::set_save_mode,
+            commands::model_settings,
+            commands::save_provider,
+            commands::delete_provider,
+            commands::list_models,
+            commands::test_connection,
+            commands::set_role,
         ])
         .events(collect_events![events::CoreEvent])
 }
@@ -45,11 +52,13 @@ pub fn run() {
                 app.package_info().name.clone(),
                 app.config().identifier.clone(),
             )?;
+            // API keys live in the login keychain under the bundle id.
+            let secrets = KeychainSecretStore::new(identity.keychain_service())?;
             let config = SunsetConfig {
                 identity,
                 data_dir: app.path().app_data_dir()?,
-                // Phase 0: scripted models. Phase 1 reads provider settings instead.
-                providers: mock::providers(Duration::from_millis(25)),
+                secrets: Arc::new(secrets),
+                demo_chunk_delay: Duration::from_millis(25),
             };
             let sunset = tauri::async_runtime::block_on(Sunset::open(config))?;
             events::forward(app.handle().clone(), &sunset);

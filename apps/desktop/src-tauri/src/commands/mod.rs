@@ -2,8 +2,9 @@
 
 use sunset_core::Sunset;
 use sunset_core::domain::{
-    ConceptId, ConceptPage, ConceptSummary, GraphView, Proposal, ProposalId, SaveMode,
-    SendMessageResult, SessionId, Turn,
+    ConceptId, ConceptPage, ConceptSummary, GraphView, ModelSettings, ProbeReport, Proposal,
+    ProposalId, ProviderId, ProviderInput, ProviderProfile, Role, SaveMode, SendMessageResult,
+    SessionId, Turn,
 };
 use tauri::State;
 
@@ -87,4 +88,57 @@ pub async fn save_mode(sunset: State<'_, Sunset>) -> CmdResult<SaveMode> {
 #[specta::specta]
 pub async fn set_save_mode(sunset: State<'_, Sunset>, mode: SaveMode) -> CmdResult<()> {
     sunset.set_save_mode(mode).await.map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn model_settings(sunset: State<'_, Sunset>) -> CmdResult<ModelSettings> {
+    sunset.model_settings().await.map_err(err)
+}
+
+/// `id` = null creates a provider. The API key is written to the Keychain and never returned.
+#[tauri::command]
+#[specta::specta]
+pub async fn save_provider(
+    sunset: State<'_, Sunset>,
+    id: Option<ProviderId>,
+    input: ProviderInput,
+) -> CmdResult<ProviderProfile> {
+    sunset.save_provider(id, input).await.map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn delete_provider(sunset: State<'_, Sunset>, id: ProviderId) -> CmdResult<()> {
+    sunset.delete_provider(id).await.map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn list_models(sunset: State<'_, Sunset>, id: ProviderId) -> CmdResult<Vec<String>> {
+    sunset.list_models(id).await.map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn test_connection(
+    sunset: State<'_, Sunset>,
+    id: ProviderId,
+    model: String,
+) -> CmdResult<ProbeReport> {
+    sunset.test_connection(id, &model).await.map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn set_role(
+    sunset: State<'_, Sunset>,
+    role: Role,
+    provider_id: ProviderId,
+    model: String,
+) -> CmdResult<()> {
+    sunset
+        .set_role(role, provider_id, &model)
+        .await
+        .map_err(err)
 }

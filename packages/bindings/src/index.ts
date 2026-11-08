@@ -19,6 +19,13 @@ export const commands = {
 	graph: () => __TAURI_INVOKE<GraphView>("graph"),
 	saveMode: () => __TAURI_INVOKE<SaveMode>("save_mode"),
 	setSaveMode: (mode: SaveMode) => __TAURI_INVOKE<null>("set_save_mode", { mode }),
+	modelSettings: () => __TAURI_INVOKE<ModelSettings>("model_settings"),
+	/**  `id` = null creates a provider. The API key is written to the Keychain and never returned. */
+	saveProvider: (id: ProviderId | null, input: ProviderInput) => __TAURI_INVOKE<ProviderProfile>("save_provider", { id, input }),
+	deleteProvider: (id: ProviderId) => __TAURI_INVOKE<null>("delete_provider", { id }),
+	listModels: (id: ProviderId) => __TAURI_INVOKE<string[]>("list_models", { id }),
+	testConnection: (id: ProviderId, model: string) => __TAURI_INVOKE<ProbeReport>("test_connection", { id, model }),
+	setRole: (role: Role, providerId: ProviderId, model: string) => __TAURI_INVOKE<null>("set_role", { role, providerId, model }),
 };
 
 /** Events */
@@ -64,6 +71,10 @@ export type ArticleRevision = {
 
 /**  Id of a visual artifact. */
 export type ArtifactId = string;
+
+export type CapabilityStatus = "supported" | "unsupported" | 
+/**  Not probed yet. The app uses the safest path until "Test connection" runs. */
+"needs_test";
 
 export type CommitId = string;
 
@@ -144,6 +155,22 @@ export type LearningObservation = {
 	createdAt: string,
 };
 
+/**  What a model can do, as found by the last probe. */
+export type ModelCapabilities = {
+	streaming: CapabilityStatus,
+	jsonSchema: CapabilityStatus,
+	toolCalls: CapabilityStatus,
+	probedAt: string | null,
+};
+
+/**  Everything the model settings screen shows. */
+export type ModelSettings = {
+	providers: ProviderProfile[],
+	roles: RoleAssignment[],
+	/**  True only when every role uses a local provider (docs/architecture.md §4.5). */
+	allLocal: boolean,
+};
+
 export type ObservationId = string;
 
 /**
@@ -169,6 +196,17 @@ export type PlotPoint = {
 };
 
 export type PlotType = "line" | "scatter" | "bar";
+
+/**  Result of "Test connection". */
+export type ProbeReport = {
+	providerId: ProviderId,
+	model: string,
+	/**  The model answered a basic request. */
+	reachable: boolean,
+	capabilities: ModelCapabilities,
+	/**  Human-readable findings, e.g. "JSON schema output: rejected (HTTP 400)". */
+	notes: string[],
+};
 
 /**  A reviewable bundle of changes. The AI only ever produces these; the core applies them. */
 export type Proposal = {
@@ -206,6 +244,41 @@ export type ProposedChange =
 /**  Private overlay entry. Evidence turns are filled in by the core, not the model. */
 { op: "add_observation"; concept: string; kind: ObservationKind; source: ObservationSource; note: string } | { op: "add_visual"; concept: string; title: string; payload: VisualPayload };
 
+/**  A configured model endpoint (docs/architecture.md §4.3). */
+export type ProviderId = string;
+
+/**
+ *  What the settings form sends. `api_key`: `None` keeps the stored key, `Some("")` removes it.
+ *  The key goes straight to the Keychain and is never sent back to the UI.
+ */
+export type ProviderInput = {
+	name: string,
+	baseUrl: string,
+	apiKey: string | null,
+};
+
+export type ProviderKind = 
+/**  Built-in scripted models. Offline; knows one topic. Used until a real model is set up. */
+"demo" | 
+/**
+ *  Anything that speaks `/v1/chat/completions`: Ollama, LM Studio, llama.cpp, vLLM,
+ *  OpenRouter, OpenAI, a self-hosted server.
+ */
+"openai_compatible";
+
+/**  A configured endpoint. The API key, if any, lives in the macOS Keychain. */
+export type ProviderProfile = {
+	id: ProviderId,
+	name: string,
+	kind: ProviderKind,
+	/**  e.g. `http://localhost:11434/v1`. Empty for `demo`. */
+	baseUrl: string,
+	hasApiKey: boolean,
+	/**  The endpoint is on this Mac or a private network, so data does not leave your machines. */
+	isLocal: boolean,
+	createdAt: string,
+};
+
 /**  A typed, directed edge between two concepts: `from --kind--> to`. */
 export type Relation = {
 	id: RelationId,
@@ -230,6 +303,21 @@ export type RelationView = {
 
 /**  Id of one article revision. */
 export type RevisionId = string;
+
+/**  A job the app needs a model for. Each role is configured separately. */
+export type Role = 
+/**  Answers and teaches; streamed to the user. */
+"tutor" | 
+/**  Turns exchanges into structured proposals. */
+"curator";
+
+/**  Which provider and model a role uses. */
+export type RoleAssignment = {
+	role: Role,
+	providerId: ProviderId,
+	model: string,
+	capabilities: ModelCapabilities,
+};
 
 /**  Whether valid proposals are committed at once or wait for the user. */
 export type SaveMode = "approval" | "auto";
