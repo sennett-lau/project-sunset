@@ -1,0 +1,17 @@
+<!-- Placeholder icon. Regenerate the PNG/ICNS files with: pnpm tauri icon src-tauri/icons/icon.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2b2d5c"/>
+      <stop offset="1" stop-color="#f08a5d"/>
+    </linearGradient>
+    <clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="184"/></clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#sky)"/>
+    <circle cx="512" cy="620" r="210" fill="#ffd166"/>
+    <rect x="100" y="620" width="824" height="304" fill="#2b2d5c"/>
+    <rect x="300" y="680" width="424" height="18" rx="9" fill="#f08a5d" opacity="0.7"/>
+    <rect x="380" y="740" width="264" height="18" rx="9" fill="#f08a5d" opacity="0.5"/>
+  </g>
+</svg>

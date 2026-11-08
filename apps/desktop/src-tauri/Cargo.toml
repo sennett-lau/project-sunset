@@ -1,0 +1,20 @@
+[package]
+name = "sunset-desktop"
+description = "Tauri shell: a thin adapter between the webview and sunset-core."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+name = "sunset_desktop"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+sunset-core.workspace = true
+tauri = { version = "2", features = [] }
+
+[lints]
+workspace = true
