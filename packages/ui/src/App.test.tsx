@@ -29,3 +29,26 @@ test("ask → streamed answer → proposal badge → approve shows the wiki → 
   fireEvent.click(await within(drawer).findByRole("button", { name: "Undo" }));
   await screen.findByText(/Your wiki is empty/);
 });
+
+test("inspectors close with Escape and restore keyboard focus", async () => {
+  render(<App client={createFakeClient()} productName="Test App" />);
+  const models = await screen.findByRole("button", { name: /Models/ });
+  models.focus();
+  fireEvent.click(models);
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close" }));
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(screen.queryByRole("complementary")).toBeNull();
+  expect(document.activeElement).toBe(models);
+});
+
+test("failed wiki loading is recoverable and never described as an empty library", async () => {
+  const client = createFakeClient();
+  let failing = true;
+  client.listConcepts = async () => { if (failing) throw new Error("Database unavailable"); return []; };
+  render(<App client={client} productName="Test App" />);
+  await screen.findByText(/Could not load your wiki/, {}, { timeout: 3000 });
+  expect(screen.queryByText(/Your wiki is empty/)).toBeNull();
+  failing = false;
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  await screen.findByText(/Your wiki is empty/);
+});

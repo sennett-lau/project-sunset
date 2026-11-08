@@ -1,4 +1,5 @@
 import type { ConceptId, ConceptPage, RelationView } from "@sunset/client";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useClient } from "../../client-context";
 import { keys } from "../../query-keys";
@@ -8,22 +9,38 @@ import { Markdown } from "./Markdown";
 export function Wiki({ selected, onSelect }: { selected: ConceptId | null; onSelect: (id: ConceptId) => void }) {
   const client = useClient();
   const concepts = useQuery({ queryKey: keys.concepts, queryFn: () => client.listConcepts() });
+  const [filter, setFilter] = useState("");
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setQuery(filter.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [filter]);
+  const search = useQuery({
+    queryKey: keys.search(query),
+    queryFn: () => client.searchKnowledge(query, 50),
+    enabled: Boolean(query),
+    retry: false,
+  });
+  const searching = Boolean(filter.trim());
+  const waiting = searching && (filter.trim() !== query || search.isFetching);
   const list = concepts.data ?? [];
+  const filtered = searching ? (filter.trim() === query ? search.data ?? [] : []) : list;
   const current = list.find((c) => c.id === selected) ?? list[0];
 
+  if (concepts.isPending) return <p role="status" className="p-6">Opening your library…</p>;
+  if (concepts.error) return <p role="alert" className="p-6">Could not load your wiki. <button onClick={() => void concepts.refetch()}>Retry</button></p>;
   if (concepts.isSuccess && list.length === 0) {
     return (
-      <p className="p-6 text-stone-500">
-        Your wiki is empty. Approved proposals from your conversations appear here.
-      </p>
+      <div className="empty-library"><span className="library-symbol" aria-hidden="true">❧</span><p className="eyebrow">Your personal library</p><h2>Understanding,<br /><em>worth keeping.</em></h2><p>Your wiki is empty. Approved or automatically saved proposals from your conversations appear here.</p><p className="text-sm">Start a conversation, then open Proposed updates to review what you’d like to keep.</p></div>
     );
   }
   return (
-    <div className="flex h-full">
-      <ul className="w-48 shrink-0 space-y-0.5 overflow-auto border-r border-stone-100 p-3 text-sm">
-        {list.map((c) => (
+    <div className="wiki-layout">
+      <div className="wiki-index"><label className="eyebrow" htmlFor="article-filter">Articles · {list.length}</label><input id="article-filter" type="search" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search knowledge…" aria-label="Search knowledge" /><ul>
+        {filtered.map((c) => (
           <li key={c.id}>
             <button
+              aria-current={c.id === current?.id ? "page" : undefined}
               onClick={() => onSelect(c.id)}
               className={`w-full rounded px-2 py-1 text-left ${c.id === current?.id ? "bg-orange-50 font-medium" : ""}`}
             >
@@ -31,7 +48,7 @@ export function Wiki({ selected, onSelect }: { selected: ConceptId | null; onSel
             </button>
           </li>
         ))}
-      </ul>
+      </ul>{waiting && <p role="status">Searching knowledge…</p>}{searching && !waiting && search.error && <p role="alert">Search failed. <button onClick={() => void search.refetch()}>Retry search</button></p>}{!waiting && !search.error && filtered.length === 0 && <p role="status" className="text-sm">No matching articles.</p>}</div>
       <div className="min-w-0 flex-1 overflow-auto p-6">
         {current && <ConceptView id={current.id} onSelect={onSelect} />}
       </div>
@@ -43,7 +60,8 @@ function ConceptView({ id, onSelect }: { id: ConceptId; onSelect: (id: ConceptId
   const client = useClient();
   const page = useQuery({ queryKey: keys.concept(id), queryFn: () => client.conceptPage(id) });
   const concepts = useQuery({ queryKey: keys.concepts, queryFn: () => client.listConcepts() });
-  if (!page.data) return null;
+  if (page.isPending) return <p role="status">Loading article…</p>;
+  if (page.error || !page.data) return <p role="alert">Could not load this article. <button onClick={() => void page.refetch()}>Retry</button></p>;
   const { concept, article, outgoing, incoming, overlay, visuals }: ConceptPage = page.data;
   const openSlug = (slug: string) => {
     const match = concepts.data?.find((c) => c.slug === slug);
@@ -58,6 +76,7 @@ function ConceptView({ id, onSelect }: { id: ConceptId; onSelect: (id: ConceptId
         {article && <p className="mt-3 text-lg text-stone-700">{article.summary}</p>}
       </header>
 
+      {!article && <p className="text-sm text-stone-500">A concept to build on. No article has been saved yet.</p>}
       {article?.bodyMd && <Markdown source={article.bodyMd} onLink={openSlug} />}
 
       {visuals.map((v) => (
