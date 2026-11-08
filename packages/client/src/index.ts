@@ -7,8 +7,14 @@ import type {
   ConceptPage,
   ConceptSummary,
   GraphView,
+  ModelSettings,
+  ProbeReport,
   Proposal,
   ProposalId,
+  ProviderId,
+  ProviderInput,
+  ProviderProfile,
+  Role,
   SaveMode,
   SendMessageResult,
   SessionId,
@@ -36,6 +42,17 @@ export interface SunsetClient {
 
   saveMode(): Promise<SaveMode>;
   setSaveMode(mode: SaveMode): Promise<void>;
+
+  /** Providers, which model each role uses, and what each model was found to support. */
+  modelSettings(): Promise<ModelSettings>;
+  /** `id` null creates a provider. `input.apiKey`: null keeps the stored key, "" removes it. */
+  saveProvider(id: ProviderId | null, input: ProviderInput): Promise<ProviderProfile>;
+  deleteProvider(id: ProviderId): Promise<void>;
+  /** Model ids the server lists. Not every server supports this. */
+  listModels(id: ProviderId): Promise<string[]>;
+  /** Probe what a model supports. The result is remembered. */
+  testConnection(id: ProviderId, model: string): Promise<ProbeReport>;
+  setRole(role: Role, providerId: ProviderId, model: string): Promise<void>;
 
   /** Receive every core event. Returns a function that stops listening. */
   onEvent(listener: (event: AppEvent) => void): () => void;

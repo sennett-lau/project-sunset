@@ -17,6 +17,16 @@ export const tauriClient: SunsetClient = {
   setSaveMode: async (mode) => {
     await commands.setSaveMode(mode);
   },
+  modelSettings: commands.modelSettings,
+  saveProvider: commands.saveProvider,
+  deleteProvider: async (id) => {
+    await commands.deleteProvider(id);
+  },
+  listModels: commands.listModels,
+  testConnection: commands.testConnection,
+  setRole: async (role, providerId, model) => {
+    await commands.setRole(role, providerId, model);
+  },
   onEvent(listener) {
     const unlisten = events.coreEvent.listen((e) => listener(e.payload));
     return () => void unlisten.then((stop) => stop());
