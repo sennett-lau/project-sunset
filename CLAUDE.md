@@ -11,9 +11,9 @@ approve, reject, edit or undo every change.
 
 ## Status
 
-**Phase 0 (skeleton) in progress.** The workspace, crate layout and a Tauri window exist. Still to
-do in Phase 0: SQLite schema, generated bindings, `SunsetClient`, mock provider and the mock
-proposal loop (`docs/architecture.md` §8).
+**Phase 0 done; Phase 1 next** (`docs/architecture.md` §8). The full loop runs on scripted mock
+models: ask "What is a VAE?", watch the answer stream, approve / reject / undo the proposal, see
+the wiki and graph change. No real model is connected yet.
 
 ## Read these first
 
@@ -55,6 +55,8 @@ proposal loop (`docs/architecture.md` §8).
 - Frontend: pnpm workspace, TypeScript strict. Use pnpm, not npm or yarn. Do not disable pnpm's
   global virtual store.
 - TypeScript types for Rust data are generated into `packages/bindings/`. Never hand-edit them.
+  After changing a Rust type or command that crosses IPC, run `pnpm gen:bindings`; `cargo test`
+  fails while the bindings are stale.
 - Product terms follow `docs/initial/initial.md` Appendix A (concept, article, proposal, revision,
   personal overlay, source anchor, ...). Table names follow Part II §7.2.
 - When a technical decision changes, update `docs/architecture.md` in the same change.
@@ -77,12 +79,17 @@ Run from the repo root.
 | `pnpm install` | Install JS dependencies |
 | `pnpm dev` | Run the desktop app (Vite + Tauri, hot reload) |
 | `pnpm build` | Build the macOS `.app` / `.dmg` |
-| `pnpm check` | Identity check, typecheck, `cargo fmt --check`, clippy, tests. **Run before every commit;** there is no automatic CI |
+| `pnpm check` | Identity check, typecheck, UI tests, `cargo fmt --check`, clippy, Rust tests. **Run before every commit;** there is no automatic CI |
 | `pnpm typecheck` | TypeScript only |
+| `pnpm test` | UI tests only (Vitest) |
+| `pnpm gen:bindings` | Regenerate `packages/bindings` from the Rust commands and types |
 | `pnpm identity:sync` | Copy `app-identity.json` into files that need a literal copy |
-| `cargo test --workspace` | Rust tests only |
+| `cargo test --workspace` | Rust tests only. `crates/sunset-core/tests/phase0_loop.rs` is the end-to-end loop test |
 
 Rust version is pinned in `rust-toolchain.toml`; rustup installs it automatically.
+
+App data in development: `~/Library/Application Support/dev.sennett.sunset/library.sqlite`. Delete
+the folder to start from an empty library.
 
 ## GitHub
 

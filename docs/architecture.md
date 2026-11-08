@@ -448,6 +448,25 @@ Phase 0 has only the quiet channel. The queue arrives with the first active noti
 | **4. Sources + visuals** | PDF ingestion via an external parser, citation anchors, typed diagram artifacts. | Paper-backed proposal with correct page reference. |
 | **Later** | `sunset-server`, sync, web client, sharing. | — |
 
+### 8.1 Phase 0 notes (done 2026-11-08)
+
+- **Undo:** knowledge rows carry `created_by_commit_id`; an undo commit sets
+  `retracted_by_commit_id` on every row the original commit made. Reads return live rows only.
+  Proposal status changes are guarded (`awaiting_approval → committed` succeeds once).
+- **Jobs:** curation is a durable `curate_turn` job. Its proposals and its completion are written
+  in one transaction, so a crash re-runs the job without duplicates.
+- **Mock models:** `sunset_core::mock` scripts the tutor and curator for one topic. The providers
+  crate's `MockChatModel` takes its answers from the caller and knows nothing about the product.
+- **Bindings:** tauri-specta (pinned pre-release) generates commands, the `coreEvent` event and
+  all types. Commands throw on error. `disable_serde_phases` keeps one TS type per Rust type.
+  Specta exports `f64` as `number | null` (JSON has no NaN); validation rejects non-finite values.
+- **UI:** the event handler cancels in-flight queries before invalidating, so an event that lands
+  during a fetch is never lost. Zustand is not used yet; local React state is enough so far.
+- **Phase 0 shortcuts to revisit:** the graph is a plain SVG circle (Cytoscape.js in Phase 1);
+  Markdown is a tiny safe subset; an existing concept's aliases are not merged on upsert; the
+  curator JSON schema is a placeholder until it is derived from the Rust types.
+- Rust minimum is 1.94 (required by sqlx 0.9); the pinned toolchain is 1.98.1.
+
 ---
 
 ## 9. Defaults and open decisions

@@ -8,7 +8,8 @@ private notes about how you learn. You stay in control: approve, reject, edit, o
 
 Think of it as a personal Wikipedia that grows from your conversations.
 
-> **Status:** Phase 0 skeleton. The app opens a window and does nothing else yet.
+> **Status:** Phase 0 done. The whole learning loop runs on scripted mock models (try "What is a
+> VAE?"). Connecting real models is Phase 1.
 >
 > "Sunset" is a working name. The product name and bundle id live in
 > [`app-identity.json`](app-identity.json) and will change before the first release.
@@ -44,8 +45,8 @@ apps/
   desktop/            Tauri app (Rust shell + React entry point)
 packages/
   ui/                 shared React UI
-  client/             SunsetClient interface (coming in Phase 0)
-  bindings/           TypeScript types generated from Rust (coming in Phase 0)
+  client/             SunsetClient interface: the only way the UI reaches a backend
+  bindings/           TypeScript types and commands generated from Rust (pnpm gen:bindings)
 ```
 
 Details: [`docs/architecture.md`](docs/architecture.md).
