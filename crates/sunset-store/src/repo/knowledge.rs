@@ -46,29 +46,85 @@ pub async fn insert_concept(
     Ok(concept)
 }
 
+/// Record an alias learned after the concept was created.
+pub async fn insert_alias(
+    conn: &mut SqliteConnection,
+    commit: CommitId,
+    concept_id: ConceptId,
+    alias: &str,
+) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO concept_aliases (id, concept_id, alias, created_by_commit_id) VALUES (?, ?, ?, ?)",
+    )
+    .bind(uuid::Uuid::now_v7().to_string())
+    .bind(concept_id.to_string())
+    .bind(alias)
+    .bind(commit.to_string())
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+/// Every live concept with all of its aliases. A personal library is small enough to match
+/// names in memory.
+pub async fn live_concepts(conn: &mut SqliteConnection, user: UserId) -> Result<Vec<Concept>> {
+    let rows = sqlx::query(
+        "SELECT * FROM concepts WHERE user_id = ? AND retracted_by_commit_id IS NULL \
+         ORDER BY title COLLATE NOCASE",
+    )
+    .bind(user.to_string())
+    .fetch_all(&mut *conn)
+    .await?;
+    let mut out = Vec::with_capacity(rows.len());
+    for row in &rows {
+        out.push(with_aliases(conn, concept_from_row(row)?).await?);
+    }
+    Ok(out)
+}
+
+async fn with_aliases(conn: &mut SqliteConnection, mut concept: Concept) -> Result<Concept> {
+    let extra: Vec<String> = sqlx::query_scalar(
+        "SELECT alias FROM concept_aliases WHERE concept_id = ? \
+         AND retracted_by_commit_id IS NULL ORDER BY id",
+    )
+    .bind(concept.id.to_string())
+    .fetch_all(&mut *conn)
+    .await?;
+    for alias in extra {
+        if !concept.aliases.contains(&alias) {
+            concept.aliases.push(alias);
+        }
+    }
+    Ok(concept)
+}
+
 pub async fn concept_by_slug(
     conn: &mut SqliteConnection,
     user: UserId,
     slug: &str,
 ) -> Result<Option<Concept>> {
-    sqlx::query(
+    let row = sqlx::query(
         "SELECT * FROM concepts WHERE user_id = ? AND slug = ? AND retracted_by_commit_id IS NULL",
     )
     .bind(user.to_string())
     .bind(slug)
     .fetch_optional(&mut *conn)
-    .await?
-    .map(|r| concept_from_row(&r))
-    .transpose()
+    .await?;
+    match row {
+        Some(r) => Ok(Some(with_aliases(conn, concept_from_row(&r)?).await?)),
+        None => Ok(None),
+    }
 }
 
 pub async fn concept(conn: &mut SqliteConnection, id: ConceptId) -> Result<Option<Concept>> {
-    sqlx::query("SELECT * FROM concepts WHERE id = ? AND retracted_by_commit_id IS NULL")
+    let row = sqlx::query("SELECT * FROM concepts WHERE id = ? AND retracted_by_commit_id IS NULL")
         .bind(id.to_string())
         .fetch_optional(&mut *conn)
-        .await?
-        .map(|r| concept_from_row(&r))
-        .transpose()
+        .await?;
+    match row {
+        Some(r) => Ok(Some(with_aliases(conn, concept_from_row(&r)?).await?)),
+        None => Ok(None),
+    }
 }
 
 /// Live concepts, by title.
@@ -428,7 +484,7 @@ pub async fn retract_commit(
     commit: CommitId,
     undo: CommitId,
 ) -> Result<u64> {
-    const RETRACT: [&str; 5] = [
+    const RETRACT: [&str; 6] = [
         "UPDATE concepts SET retracted_by_commit_id = ? \
          WHERE created_by_commit_id = ? AND retracted_by_commit_id IS NULL",
         "UPDATE article_revisions SET retracted_by_commit_id = ? \
@@ -438,6 +494,8 @@ pub async fn retract_commit(
         "UPDATE learning_observations SET retracted_by_commit_id = ? \
          WHERE created_by_commit_id = ? AND retracted_by_commit_id IS NULL",
         "UPDATE visual_artifacts SET retracted_by_commit_id = ? \
+         WHERE created_by_commit_id = ? AND retracted_by_commit_id IS NULL",
+        "UPDATE concept_aliases SET retracted_by_commit_id = ? \
          WHERE created_by_commit_id = ? AND retracted_by_commit_id IS NULL",
     ];
     let mut hidden = 0;

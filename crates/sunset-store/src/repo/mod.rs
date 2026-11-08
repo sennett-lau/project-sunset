@@ -4,6 +4,7 @@
 pub mod commits;
 pub mod jobs;
 pub mod knowledge;
+pub mod models;
 pub mod proposals;
 pub mod sessions;
 pub mod users;
