@@ -25,30 +25,158 @@ wins. Where they disagree on *product behavior*, the initial spec wins.
 
 ## 2. Layout
 
+`[P0]`, `[P1]`, ... mark the build phase (§8) that creates an item. `[Later]` means after the
+phases in §8.
+
+### 2.1 Repository
+
 ```text
 project-sunset/
-├── Cargo.toml                 # Rust workspace
-├── package.json               # pnpm workspace root
-├── crates/
-│   ├── sunset-core/           # Domain types, knowledge pipeline, proposals, revisions, job runner,
-│   │                          # event bus. No Tauri, no HTTP server, no UI code.
-│   ├── sunset-store/          # SQLite (sqlx) persistence, migrations, FTS + vector search,
-│   │                          # Markdown vault mirror.
-│   ├── sunset-providers/      # AI provider traits + adapters (OpenAI-compatible, Anthropic, ...),
-│   │                          # capability probing, role routing.
-│   └── sunset-server/         # LATER. axum HTTP/WS wrapper around sunset-core for a web client.
-├── apps/
-│   └── desktop/               # Tauri v2 app
-│       ├── src-tauri/         # Thin Rust shell: commands + events that call sunset-core
-│       └── src/               # React + TypeScript UI (Vite)
-├── packages/
-│   └── bindings/              # TS types generated from Rust (specta / ts-rs). Never hand-edited.
-└── docs/
+├── .github/workflows/ci.yml   # [P0] fmt, clippy, tests, typecheck, identity check
+├── .editorconfig              # [P0]
+├── rust-toolchain.toml        # [P0] pinned Rust version
+├── Cargo.toml                 # [P0] Rust workspace
+├── package.json               # [P0] pnpm workspace root and scripts
+├── pnpm-workspace.yaml        # [P0]
+├── app-identity.json          # [P0] product name + bundle id, the only place they are written (§2.7)
+├── crates/                    # all Rust logic
+├── apps/                      # runnable apps (desktop now, web later)
+├── packages/                  # shared TypeScript code
+├── docs/
+├── eval/                      # [P3] Cantonese / English test sets and benchmarks
+└── scripts/                   # [P0] small dev scripts (identity sync, binding generation)
 ```
 
-The UI talks to the backend through one TypeScript interface (`SunsetClient`). The desktop app
-implements it with Tauri `invoke` + events. A future web app implements it with `fetch` +
-WebSocket against `sunset-server`. UI components never call Tauri APIs directly.
+### 2.2 Rust crates
+
+Dependencies point one way. `sunset-domain` holds plain data types so that `sunset-store` and
+`sunset-core` can share them without a cycle. `sunset-providers` is a plain AI client library and
+knows nothing about concepts or articles.
+
+```text
+sunset-domain  ←  sunset-store  ←┐
+                                 ├─  sunset-core  ←  apps/desktop/src-tauri
+sunset-providers  ←──────────────┘                ←  sunset-server [Later]
+```
+
+**`sunset-domain`**: data types only, no I/O. TypeScript bindings are generated from these types.
+
+```text
+crates/sunset-domain/src/
+├── identity.rs      # AppIdentity (product name, bundle id), injected at startup (§2.7)
+├── ids.rs           # typed UUIDv7 ids (SessionId, ConceptId, ...)
+├── session.rs       # Session, Turn
+├── concept.rs       # Concept, Alias
+├── article.rs       # ArticleRevision, section structure
+├── relation.rs      # Relation + closed set of relation types (IS_A, PART_OF, USES, ...)
+├── observation.rs   # LearningObservation (private overlay)
+├── source.rs        # Source, SourceSpan [P4]
+├── proposal.rs      # Proposal, Patch, Evidence, lifecycle state
+├── commit.rs        # Commit (append-only, undo_of)
+├── settings.rs      # user settings, save mode (auto / approval)
+└── events.rs        # app event enum (turn.finalized, proposal.created, ...)
+```
+
+**`sunset-providers`**: AI model access.
+
+```text
+crates/sunset-providers/src/
+├── traits.rs        # ChatModel, Embedder; later SpeechToText, TextToSpeech, RealtimeVoice
+├── types.rs         # ChatRequest, ChatDelta, ToolCall, Usage
+├── config.rs        # ProviderConfig (kind, base_url, keychain reference)
+├── roles.rs         # tutor / curator / classifier / embedder → provider + model
+├── probe.rs         # [P1] Test connection: tool calling, JSON schema, context window
+├── structured.rs    # [P1] JSON schema → tool call → plain JSON, serde validation + one retry
+├── secrets.rs       # [P1] macOS Keychain (keyring crate)
+├── sse.rs           # [P1] streaming SSE parser
+└── adapters/
+    ├── mock.rs           # [P0] deterministic answers for tests and Phase 0
+    ├── openai_compat.rs  # [P1] Ollama, LM Studio, llama.cpp, vLLM, OpenRouter, OpenAI, ...
+    ├── anthropic.rs      # [P1/P2]
+    └── gemini.rs         # [Later] when a feature needs it
+```
+
+**`sunset-store`**: SQLite and the Markdown vault.
+
+```text
+crates/sunset-store/
+├── migrations/0001_init.sql   # [P0] canonical tables (initial spec Part II §7.2)
+└── src/
+    ├── db.rs                  # open, migrate, pool
+    ├── repo/                  # one file per table: sessions.rs, concepts.rs, proposals.rs, ...
+    ├── search/fts.rs          # [P2] FTS5 trigram (works for Cantonese)
+    ├── search/vector.rs       # [P2] embeddings + brute-force cosine
+    ├── vault/mirror.rs        # [P2] write vault/<slug>.md after each commit
+    └── vault/export.rs        # [P2] export without the private overlay
+```
+
+**`sunset-core`**: all business logic.
+
+```text
+crates/sunset-core/
+├── src/
+│   ├── app.rs             # `Sunset`: entry point; owns store, providers, event bus, job runner
+│   ├── error.rs
+│   ├── bus.rs             # tokio broadcast event bus
+│   ├── conversation/
+│   │   ├── session.rs     # open/close sessions, record turns
+│   │   ├── tutor.rs       # fast path: stream the tutor answer
+│   │   └── context.rs     # [P2] bounded context (related concepts, preferences)
+│   ├── knowledge/         # slow path: background capture
+│   │   ├── gate.rs        # worth capturing? (classifier role)
+│   │   ├── curator.rs     # turn → proposals
+│   │   ├── validate.rs    # schema, evidence and duplicate checks
+│   │   ├── policy.rs      # auto-save or wait for approval
+│   │   └── apply.rs       # commit; undo as a compensating commit
+│   ├── jobs/
+│   │   ├── runner.rs      # durable jobs in the `jobs` table, resumed on restart
+│   │   └── kinds.rs       # CurateTurn, EmbedConcept, ...
+│   ├── tools/             # [P2] Tool trait, built-in tools, MCP client (rmcp)
+│   └── prompts/           # prompt templates as .md files, not Rust string literals
+└── tests/                 # cross-crate tests: approval mode, undo, duplicate concepts
+```
+
+**`sunset-server`** `[Later]`: axum HTTP + WebSocket wrapper around `sunset-core` for a web client.
+
+### 2.3 Apps and frontend packages
+
+The UI lives in `packages/ui`, not inside the desktop app, so a web app can reuse it with a
+different `SunsetClient` implementation.
+
+```text
+apps/
+├── desktop/
+│   ├── index.html, vite.config.ts, package.json
+│   ├── src/
+│   │   ├── main.tsx              # mounts <App client={tauriClient} />
+│   │   └── tauri-client.ts       # SunsetClient over Tauri invoke + listen
+│   └── src-tauri/
+│       ├── tauri.conf.json       # identity fields are synced from app-identity.json (§2.7)
+│       ├── capabilities/         # Tauri v2 permissions, minimum needed
+│       ├── Info.plist            # [P3] microphone usage description
+│       ├── icons/
+│       └── src/
+│           ├── main.rs, lib.rs   # start sunset-core, register commands
+│           ├── commands/         # conversation.rs, knowledge.rs, settings.rs (thin)
+│           └── events.rs         # core events → Tauri events
+└── web/                          # [Later] SunsetClient over HTTP/WS + the same UI
+
+packages/
+├── bindings/     # generated TypeScript types; never hand-edited
+├── client/       # SunsetClient interface: the contract between UI and backend
+└── ui/           # shared React UI
+    └── src/
+        ├── App.tsx
+        ├── features/
+        │   ├── conversation/   # transcript, input, next-topic chips
+        │   ├── proposals/      # quiet proposal drawer: approve / reject / undo
+        │   ├── wiki/           # articles, backlinks, private overlay toggle, history
+        │   ├── graph/          # focused Cytoscape.js graph
+        │   ├── settings/       # providers, roles, Test connection
+        │   └── onboarding/     # short first-run questions
+        ├── components/, hooks/, styles/
+        └── state/              # TanStack Query (backend data) + Zustand (UI state)
+```
 
 ```mermaid
 flowchart LR
@@ -65,6 +193,70 @@ flowchart LR
   P -->|HTTP| M2[Ollama / LM Studio / llama.cpp<br/>on this Mac]
   P -->|HTTP| M3[Self-hosted GPU box<br/>vLLM, ASR, TTS]
 ```
+
+### 2.4 Docs
+
+```text
+docs/
+├── initial/initial.md     # original idea; not edited
+├── architecture.md        # this document
+├── decisions/             # ADRs, one short file per significant decision
+└── guides/
+    ├── development.md     # setup and running
+    └── providers.md       # [P1] connecting Ollama, LM Studio, self-hosted servers
+```
+
+### 2.5 Data on the user's Mac
+
+```text
+~/Library/Application Support/<bundle-id>/
+├── library.sqlite     # source of truth
+├── files/             # uploaded PDFs, images [P4]
+└── logs/
+~/Documents/<Product Name> Vault/   # [P2] Markdown mirror; user picks the location
+macOS Keychain                       # API keys, service name = bundle id
+```
+
+### 2.6 Walkthrough: typing "What is a VAE?"
+
+1. The UI calls `client.sendMessage()`, which reaches `sunset-core` through a Tauri command.
+2. `conversation/tutor.rs` streams the answer back right away (fast path).
+3. When the turn finishes, the bus emits `turn.finalized` and `jobs` queues a `CurateTurn` job
+   (slow path; the answer never waits for it).
+4. `gate.rs` decides whether the turn is worth capturing. If so, `curator.rs` drafts proposals and
+   `validate.rs` checks them.
+5. `policy.rs` either commits through `apply.rs` (auto mode) or emits `proposal.created` so the
+   drawer count goes up (approval mode).
+6. Reject or Undo makes `apply.rs` append a compensating commit. History is never deleted.
+
+### 2.7 App identity (temporary name)
+
+"Sunset" is a working name. The product name and bundle id will change before the first release,
+so they are written in exactly one file:
+
+```jsonc
+// app-identity.json
+{ "productName": "Sunset", "bundleId": "dev.sennett.sunset" }
+```
+
+How each place gets them:
+
+| Where | Field(s) | How |
+|---|---|---|
+| `apps/desktop/src-tauri/tauri.conf.json` | `productName`, `identifier`, main window `title` | Copied by `pnpm identity:sync`. CI runs `pnpm identity:check` and fails if they drift. |
+| Rust (`src-tauri`) | both | Read at runtime from the Tauri config, turned into `sunset_domain::AppIdentity`, passed to `sunset-core`. |
+| `sunset-core` and below | both | Only through the injected `AppIdentity`. Never a string literal. |
+| App data directory | bundle id | Derived by Tauri (`app_data_dir()`); passed into the core as a path. |
+| Keychain service name | bundle id | `AppIdentity::keychain_service()`. |
+| Vault folder default | product name | `AppIdentity::default_vault_folder_name()`. |
+| TypeScript UI | product name | Imports `app-identity.json` at build time. |
+
+**Renaming checklist:** edit `app-identity.json`, run `pnpm identity:sync`, commit both. Changing
+the bundle id moves the app data directory and Keychain entries, so it is a breaking change once
+real users exist. Do it before the first public build, or ship a migration with it.
+
+**Code name vs product name:** `sunset-*` crate and package names, the repo name and the `Sunset*`
+type names are internal code names. They do not have to change with the product name.
 
 ---
 
