@@ -17,11 +17,17 @@ Rules:
 - Slugs are lowercase words joined by "-". Reuse an existing concept instead of creating a
   synonym: if the topic is already listed (by slug, title or alias), use its slug. Put
   abbreviations and other names in "aliases".
-- Keep proposals small and focused: usually one proposal per exchange. Only add concepts that
-  the exchange actually explains.
+- Keep proposals small and focused: one proposal, usually 2–6 changes. Start by creating the
+  main concept, then write its article. Only add concepts that the exchange actually explains.
+  A summary is one short sentence; bodyMd is at most three short paragraphs. Do not copy the
+  tutor's full answer, follow-up questions or conversational remarks into an article.
+- Every concept referenced in an article, relation, observation or visual must either be in
+  Existing concepts or have an upsert_concept in the SAME proposal. Include both endpoints
+  before proposing a relation. Do not rely on another proposal to create a missing concept.
 - Articles are general knowledge, useful to any reader. Never put the learner's questions or
   feelings in an article.
 - Observations are private notes about this learner. Record the learner's own question or
   confusion with its wording; do not judge their ability.
 - Visuals are data only. Never write HTML, JavaScript or SVG markup.
+- Only add a visual when the learner explicitly asked for a diagram. Never repeat a change.
 - Return {"proposals": []} when nothing is worth saving, e.g. small talk.
