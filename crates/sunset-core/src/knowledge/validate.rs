@@ -88,19 +88,12 @@ impl NameIndex {
 
 /// Returns a reason when the draft is invalid. Run [`NameIndex::normalize`] first.
 pub fn draft(d: &ProposalDraft, existing: &NameIndex) -> Result<(), String> {
-    if d.summary.trim().is_empty() {
-        return Err("summary is empty".into());
-    }
+    text(&d.summary, "summary")?;
     if d.changes.is_empty() || d.changes.len() > MAX_CHANGES {
         return Err(format!("needs 1 to {MAX_CHANGES} changes"));
     }
     let mut known: HashSet<&str> = existing.slugs.iter().map(String::as_str).collect();
-    for change in &d.changes {
-        if let ProposedChange::UpsertConcept { slug, .. } = change {
-            known.insert(slug);
-        }
-    }
-    let refers = |slug: &str| -> Result<(), String> {
+    let refers = |known: &HashSet<&str>, slug: &str| -> Result<(), String> {
         if known.contains(slug) {
             Ok(())
         } else {
@@ -109,32 +102,48 @@ pub fn draft(d: &ProposalDraft, existing: &NameIndex) -> Result<(), String> {
     };
     for change in &d.changes {
         match change {
-            ProposedChange::UpsertConcept { slug, title, .. } => {
+            ProposedChange::UpsertConcept {
+                slug,
+                title,
+                aliases,
+            } => {
                 if slug.is_empty() || slugify(slug) != *slug {
                     return Err(format!("bad slug {slug:?}"));
                 }
+                known.insert(slug);
                 text(title, "title")?;
+                if aliases.len() > 100 {
+                    return Err("too many aliases".into());
+                }
+                for alias in aliases {
+                    text(alias, "alias")?;
+                }
             }
             ProposedChange::ReviseArticle {
                 concept,
                 summary,
                 body_md,
             } => {
-                refers(concept)?;
+                refers(&known, concept)?;
                 text(summary, "article summary")?;
                 if body_md.len() > MAX_TEXT {
                     return Err("article body is too long".into());
                 }
             }
-            ProposedChange::AddRelation { from, to, .. } => {
-                refers(from)?;
-                refers(to)?;
+            ProposedChange::AddRelation {
+                from, to, label, ..
+            } => {
+                if let Some(label) = label {
+                    text(label, "relation label")?;
+                }
+                refers(&known, from)?;
+                refers(&known, to)?;
                 if from == to {
                     return Err("relation points to itself".into());
                 }
             }
             ProposedChange::AddObservation { concept, note, .. } => {
-                refers(concept)?;
+                refers(&known, concept)?;
                 text(note, "observation note")?;
             }
             ProposedChange::AddVisual {
@@ -142,7 +151,7 @@ pub fn draft(d: &ProposalDraft, existing: &NameIndex) -> Result<(), String> {
                 title,
                 payload,
             } => {
-                refers(concept)?;
+                refers(&known, concept)?;
                 text(title, "visual title")?;
                 visual(payload)?;
             }

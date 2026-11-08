@@ -192,7 +192,10 @@ async fn real_provider_loop_with_keychain_key_and_alias_dedupe() {
     let mut rx = s.app.subscribe();
     s.app.send_message(None, "What is a VAE?").await.unwrap();
     let first = next_proposal(&mut rx).await;
-    s.app.approve_proposal(first.id).await.unwrap();
+    s.app
+        .approve_proposal(first.id, first.revision)
+        .await
+        .unwrap();
     let concepts = s.app.concepts().await.unwrap();
     assert_eq!(concepts.len(), 1);
     assert_eq!(
@@ -232,7 +235,10 @@ async fn real_provider_loop_with_keychain_key_and_alias_dedupe() {
         .await
         .unwrap();
     let second = next_proposal(&mut rx).await;
-    s.app.approve_proposal(second.id).await.unwrap();
+    s.app
+        .approve_proposal(second.id, second.revision)
+        .await
+        .unwrap();
 
     let concepts = s.app.concepts().await.unwrap();
     assert_eq!(concepts.len(), 1, "no duplicate concept");

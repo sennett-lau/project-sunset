@@ -9,7 +9,8 @@ afterEach(cleanup);
 async function seeded() {
   const client = createFakeClient();
   await client.sendMessage(null, "What is a VAE?");
-  await client.approveProposal((await client.pendingProposals())[0]!.id);
+  const proposal = (await client.pendingProposals())[0]!;
+  await client.approveProposal(proposal.id, proposal.revision);
   return client;
 }
 
@@ -24,10 +25,10 @@ test("wiki searches aliases through the backend, debounces, and refreshes on kno
   expect(search).not.toHaveBeenCalled();
   await waitFor(() => expect(search).toHaveBeenCalledExactlyOnceWith("VAE", 50));
   expect(await screen.findByRole("button", { name: "Variational Autoencoder" })).toBeTruthy();
-  await act(async () => { await client.approveProposal((await client.recentProposals(1))[0]!.id); });
+  await act(async () => { await client.undoProposal((await client.recentProposals(1))[0]!.id); });
   await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
   fireEvent.change(input, { target: { value: "" } });
-  expect(screen.getByRole("button", { name: "Variational Autoencoder" })).toBeTruthy();
+  await screen.findByText(/Your wiki is empty/);
 });
 
 test("wiki handles fulltext results, pending search, failure, and retry", async () => {

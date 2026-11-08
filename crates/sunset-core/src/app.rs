@@ -5,8 +5,9 @@ use std::time::Duration;
 
 use sunset_domain::{
     AppEvent, AppIdentity, ConceptId, ConceptPage, ConceptSummary, GraphView, ModelSettings,
-    ProbeReport, Proposal, ProposalId, ProposalStatus, ProviderId, ProviderInput, ProviderProfile,
-    RelationView, Role, SaveMode, SendMessageResult, SessionId, Turn, UserId,
+    ProbeReport, Proposal, ProposalEdit, ProposalId, ProposalStatus, ProposalVersion, ProviderId,
+    ProviderInput, ProviderProfile, RelationView, Role, SaveMode, SendMessageResult, SessionId,
+    Turn, UserId,
 };
 use sunset_providers::HttpClient;
 use sunset_providers::adapters::openai_compat::http_client;
@@ -218,12 +219,28 @@ impl Sunset {
         Ok(proposals::list_recent(&mut *self.inner.store.conn().await?, limit).await?)
     }
 
-    pub async fn approve_proposal(&self, id: ProposalId) -> Result<Proposal> {
-        knowledge::apply::approve(self, id).await
+    pub async fn approve_proposal(
+        &self,
+        id: ProposalId,
+        expected_revision: u32,
+    ) -> Result<Proposal> {
+        knowledge::apply::approve(self, id, expected_revision).await
     }
 
-    pub async fn reject_proposal(&self, id: ProposalId) -> Result<Proposal> {
-        knowledge::apply::reject(self, id).await
+    pub async fn reject_proposal(
+        &self,
+        id: ProposalId,
+        expected_revision: u32,
+    ) -> Result<Proposal> {
+        knowledge::apply::reject(self, id, expected_revision).await
+    }
+
+    pub async fn edit_proposal(&self, id: ProposalId, edit: ProposalEdit) -> Result<Proposal> {
+        knowledge::apply::edit(self, id, edit).await
+    }
+
+    pub async fn proposal_versions(&self, id: ProposalId) -> Result<Vec<ProposalVersion>> {
+        Ok(proposals::versions(&mut *self.inner.store.conn().await?, id).await?)
     }
 
     /// Undo a committed proposal with a compensating commit.

@@ -3,8 +3,8 @@
 use sunset_core::Sunset;
 use sunset_core::domain::{
     ConceptId, ConceptPage, ConceptSummary, GraphView, ModelSettings, ProbeReport, Proposal,
-    ProposalId, ProviderId, ProviderInput, ProviderProfile, Role, SaveMode, SendMessageResult,
-    SessionId, Turn,
+    ProposalEdit, ProposalId, ProposalVersion, ProviderId, ProviderInput, ProviderProfile, Role,
+    SaveMode, SendMessageResult, SessionId, Turn,
 };
 use tauri::State;
 
@@ -44,14 +44,47 @@ pub async fn recent_proposals(sunset: State<'_, Sunset>, limit: u32) -> CmdResul
 
 #[tauri::command]
 #[specta::specta]
-pub async fn approve_proposal(sunset: State<'_, Sunset>, id: ProposalId) -> CmdResult<Proposal> {
-    sunset.approve_proposal(id).await.map_err(err)
+pub async fn approve_proposal(
+    sunset: State<'_, Sunset>,
+    id: ProposalId,
+    expected_revision: u32,
+) -> CmdResult<Proposal> {
+    sunset
+        .approve_proposal(id, expected_revision)
+        .await
+        .map_err(err)
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn reject_proposal(sunset: State<'_, Sunset>, id: ProposalId) -> CmdResult<Proposal> {
-    sunset.reject_proposal(id).await.map_err(err)
+pub async fn reject_proposal(
+    sunset: State<'_, Sunset>,
+    id: ProposalId,
+    expected_revision: u32,
+) -> CmdResult<Proposal> {
+    sunset
+        .reject_proposal(id, expected_revision)
+        .await
+        .map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn edit_proposal(
+    sunset: State<'_, Sunset>,
+    id: ProposalId,
+    edit: ProposalEdit,
+) -> CmdResult<Proposal> {
+    sunset.edit_proposal(id, edit).await.map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn proposal_versions(
+    sunset: State<'_, Sunset>,
+    id: ProposalId,
+) -> CmdResult<Vec<ProposalVersion>> {
+    sunset.proposal_versions(id).await.map_err(err)
 }
 
 #[tauri::command]

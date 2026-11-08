@@ -116,6 +116,7 @@ async fn curate(app: &Sunset, job: JobId, payload: CurateTurn) -> Result<()> {
             summary: draft.summary,
             changes: draft.changes,
             status: ProposalStatus::AwaitingApproval,
+            revision: 0,
             commit_id: None,
             created_at: chrono_now(),
         });

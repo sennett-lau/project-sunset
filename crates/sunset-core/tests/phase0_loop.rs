@@ -97,7 +97,10 @@ async fn ask_stream_propose_approve_undo() {
     assert!(app.search_knowledge("VAE", 10).await.unwrap().is_empty());
 
     // Approve: the wiki and graph change.
-    let approved = app.approve_proposal(proposal.id).await.unwrap();
+    let approved = app
+        .approve_proposal(proposal.id, proposal.revision)
+        .await
+        .unwrap();
     assert_eq!(approved.status, ProposalStatus::Committed);
     assert!(app.pending_proposals().await.unwrap().is_empty());
     let concepts = app.concepts().await.unwrap();
@@ -143,7 +146,11 @@ async fn ask_stream_propose_approve_undo() {
     assert_eq!((graph.nodes.len(), graph.edges.len()), (3, 2));
 
     // Approving twice is refused.
-    assert!(app.approve_proposal(proposal.id).await.is_err());
+    assert!(
+        app.approve_proposal(proposal.id, proposal.revision)
+            .await
+            .is_err()
+    );
 
     // Undo: a compensating commit hides everything again.
     let undone = app.undo_proposal(proposal.id).await.unwrap();
@@ -157,7 +164,7 @@ async fn ask_stream_propose_approve_undo() {
 
     // Ask again and reject: nothing is saved.
     let again = ask(&app, &mut rx, "Can you explain VAE again?").await;
-    let rejected = app.reject_proposal(again.id).await.unwrap();
+    let rejected = app.reject_proposal(again.id, again.revision).await.unwrap();
     assert_eq!(rejected.status, ProposalStatus::Rejected);
     assert!(app.concepts().await.unwrap().is_empty());
     assert!(
@@ -167,7 +174,9 @@ async fn ask_stream_propose_approve_undo() {
 
     // Ask a third time and approve: the article starts again at a fresh concept.
     let third = ask(&app, &mut rx, "vae?").await;
-    app.approve_proposal(third.id).await.unwrap();
+    app.approve_proposal(third.id, third.revision)
+        .await
+        .unwrap();
     assert_eq!(app.concepts().await.unwrap().len(), 3);
 }
 
@@ -228,4 +237,139 @@ async fn empty_messages_are_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let app = open(dir.path()).await;
     assert!(app.send_message(None, "   ").await.is_err());
+}
+
+#[tokio::test]
+async fn edit_review_approve_preserves_evidence_and_history() {
+    use sunset_core::domain::ProposalEdit;
+    let dir = tempfile::tempdir().unwrap();
+    let app = open(dir.path()).await;
+    let mut rx = app.subscribe();
+    let original = ask(&app, &mut rx, "What is a VAE?").await;
+    let mut edit = ProposalEdit {
+        expected_revision: original.revision,
+        summary: "My corrected explanation".into(),
+        changes: original.changes.clone(),
+    };
+    edit.changes
+        .retain(|c| !matches!(c, ProposedChange::AddObservation { .. }));
+    for change in &mut edit.changes {
+        if let ProposedChange::ReviseArticle { body_md, .. } = change {
+            *body_md = "A learner-reviewed explanation of the model.".into();
+        }
+    }
+    // Invalid references never alter the pending content or create a history entry.
+    let mut invalid = edit.clone();
+    invalid.changes.push(ProposedChange::ReviseArticle {
+        concept: "missing-concept".into(),
+        summary: "Invalid".into(),
+        body_md: "Bad reference".into(),
+    });
+    assert!(app.edit_proposal(original.id, invalid).await.is_err());
+    assert_eq!(app.pending_proposals().await.unwrap()[0], original);
+    assert_eq!(app.proposal_versions(original.id).await.unwrap().len(), 1);
+
+    let edited = app.edit_proposal(original.id, edit.clone()).await.unwrap();
+    assert_eq!(edited.revision, 1);
+    assert_eq!(edited.evidence_turn_ids, original.evidence_turn_ids);
+    assert_eq!(edited.session_id, original.session_id);
+    assert_eq!(edited.created_at, original.created_at);
+    assert_eq!(edited.status, ProposalStatus::AwaitingApproval);
+    assert!(app.concepts().await.unwrap().is_empty());
+    assert!(app.export_public().await.unwrap().is_empty());
+    // A stale reviewer cannot overwrite, approve or reject content they have not seen.
+    assert!(app.edit_proposal(original.id, edit.clone()).await.is_err());
+    assert!(
+        app.approve_proposal(original.id, original.revision)
+            .await
+            .is_err()
+    );
+    assert!(
+        app.reject_proposal(original.id, original.revision)
+            .await
+            .is_err()
+    );
+    let history = app.proposal_versions(original.id).await.unwrap();
+    assert_eq!(history.len(), 2);
+    assert_eq!(history[0].changes, edited.changes);
+    assert_eq!(history[1].changes, original.changes);
+    assert_eq!(history[1].summary, original.summary);
+
+    app.close().await;
+    let app = open(dir.path()).await;
+    assert_eq!(app.proposal_versions(original.id).await.unwrap(), history);
+    assert_eq!(app.pending_proposals().await.unwrap()[0], edited);
+    app.approve_proposal(edited.id, edited.revision)
+        .await
+        .unwrap();
+    let vae = app
+        .concepts()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|c| c.slug == "variational-autoencoder")
+        .unwrap();
+    let page = app.concept_page(vae.id).await.unwrap();
+    assert_eq!(
+        page.article.unwrap().body_md,
+        "A learner-reviewed explanation of the model."
+    );
+    assert!(page.overlay.is_empty());
+    assert!(
+        app.export_public()
+            .await
+            .unwrap()
+            .iter()
+            .any(|f| f.markdown.contains("learner-reviewed"))
+    );
+    edit.expected_revision = edited.revision;
+    assert!(app.edit_proposal(edited.id, edit).await.is_err());
+    assert_eq!(app.proposal_versions(original.id).await.unwrap(), history);
+    app.undo_proposal(edited.id).await.unwrap();
+    assert!(app.export_public().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn competing_edit_and_decision_have_exactly_one_winner() {
+    use sunset_core::domain::ProposalEdit;
+    for (approve, edit_first) in [(true, true), (true, false), (false, true), (false, false)] {
+        let dir = tempfile::tempdir().unwrap();
+        let app = open(dir.path()).await;
+        let original = ask(&app, &mut app.subscribe(), "What is a VAE?").await;
+        let edit = ProposalEdit {
+            expected_revision: original.revision,
+            summary: "Concurrent correction".into(),
+            changes: original.changes.clone(),
+        };
+        let decision = async {
+            if approve {
+                app.approve_proposal(original.id, original.revision).await
+            } else {
+                app.reject_proposal(original.id, original.revision).await
+            }
+        };
+        let (edited, decided) = if edit_first {
+            tokio::join!(app.edit_proposal(original.id, edit), decision)
+        } else {
+            let (decided, edited) = tokio::join!(decision, app.edit_proposal(original.id, edit));
+            (edited, decided)
+        };
+        assert_ne!(edited.is_ok(), decided.is_ok());
+        let current = app.recent_proposals(1).await.unwrap().remove(0);
+        if edited.is_ok() {
+            assert_eq!(current.revision, 1);
+            assert_eq!(current.status, ProposalStatus::AwaitingApproval);
+            assert!(app.concepts().await.unwrap().is_empty());
+        } else {
+            assert_eq!(current.revision, 0);
+            assert_eq!(
+                current.status,
+                if approve {
+                    ProposalStatus::Committed
+                } else {
+                    ProposalStatus::Rejected
+                }
+            );
+        }
+    }
 }

@@ -17,8 +17,10 @@ export const commands = {
 	listTurns: (sessionId: SessionId) => __TAURI_INVOKE<Turn[]>("list_turns", { sessionId }),
 	pendingProposals: () => __TAURI_INVOKE<Proposal[]>("pending_proposals"),
 	recentProposals: (limit: number) => __TAURI_INVOKE<Proposal[]>("recent_proposals", { limit }),
-	approveProposal: (id: ProposalId) => __TAURI_INVOKE<Proposal>("approve_proposal", { id }),
-	rejectProposal: (id: ProposalId) => __TAURI_INVOKE<Proposal>("reject_proposal", { id }),
+	editProposal: (id: ProposalId, edit: ProposalEdit) => __TAURI_INVOKE<Proposal>("edit_proposal", { id, edit }),
+	proposalVersions: (id: ProposalId) => __TAURI_INVOKE<ProposalVersion[]>("proposal_versions", { id }),
+	approveProposal: (id: ProposalId, expectedRevision: number) => __TAURI_INVOKE<Proposal>("approve_proposal", { id, expectedRevision }),
+	rejectProposal: (id: ProposalId, expectedRevision: number) => __TAURI_INVOKE<Proposal>("reject_proposal", { id, expectedRevision }),
 	undoProposal: (id: ProposalId) => __TAURI_INVOKE<Proposal>("undo_proposal", { id }),
 	listConcepts: () => __TAURI_INVOKE<ConceptSummary[]>("list_concepts"),
 	conceptPage: (id: ConceptId) => __TAURI_INVOKE<ConceptPage>("concept_page", { id }),
@@ -222,10 +224,19 @@ export type Proposal = {
 	evidenceTurnIds: TurnId[],
 	summary: string,
 	changes: ProposedChange[],
+	/**  Optimistic concurrency token for edits, approval and rejection. */
+	revision: number,
 	status: ProposalStatus,
 	/**  Set once committed; undo targets this commit. */
 	commitId: CommitId | null,
 	createdAt: string,
+};
+
+/**  Editable content only. Evidence, session, identity and lifecycle stay core-owned. */
+export type ProposalEdit = {
+	expectedRevision: number,
+	summary: string,
+	changes: ProposedChange[],
 };
 
 export type ProposalId = string;
@@ -235,6 +246,14 @@ export type ProposalId = string;
  *  proposals stay inside the curator.
  */
 export type ProposalStatus = "awaiting_approval" | "committed" | "rejected" | "undone";
+
+/**  Immutable snapshot of the original proposal or a learner edit. */
+export type ProposalVersion = {
+	revision: number,
+	summary: string,
+	changes: ProposedChange[],
+	createdAt: string,
+};
 
 /**
  *  One change inside a proposal. Concepts are referred to by slug, because a proposal may

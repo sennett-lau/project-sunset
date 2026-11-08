@@ -1,7 +1,9 @@
 use chrono::Utc;
 use sqlx::sqlite::SqliteRow;
 use sqlx::{Row, SqliteConnection};
-use sunset_domain::{CommitId, Proposal, ProposalId, ProposalStatus, UserId};
+use sunset_domain::{
+    CommitId, Proposal, ProposalId, ProposalStatus, ProposalVersion, ProposedChange, UserId,
+};
 
 use crate::{Result, codec};
 
@@ -22,7 +24,49 @@ pub async fn insert(conn: &mut SqliteConnection, user: UserId, p: &Proposal) -> 
     .bind(p.created_at)
     .execute(&mut *conn)
     .await?;
+    snapshot(conn, p.id).await?;
     Ok(())
+}
+
+async fn snapshot(conn: &mut SqliteConnection, id: ProposalId) -> Result<()> {
+    sqlx::query("INSERT INTO proposal_versions (proposal_id, revision, summary, changes_json, created_at) SELECT id, revision, summary, changes_json, updated_at FROM proposals WHERE id = ?")
+        .bind(id.to_string()).execute(conn).await?;
+    Ok(())
+}
+
+/// Compare-and-swap the pending content and append its immutable snapshot in the caller's transaction.
+pub async fn edit(
+    conn: &mut SqliteConnection,
+    id: ProposalId,
+    expected_revision: u32,
+    summary: &str,
+    changes: &[ProposedChange],
+) -> Result<bool> {
+    let done = sqlx::query("UPDATE proposals SET summary = ?, changes_json = ?, revision = revision + 1, updated_at = ? WHERE id = ? AND status = 'awaiting_approval' AND revision = ?")
+        .bind(summary).bind(codec::to_json(changes)?).bind(Utc::now())
+        .bind(id.to_string()).bind(expected_revision).execute(&mut *conn).await?;
+    if done.rows_affected() != 1 {
+        return Ok(false);
+    }
+    snapshot(conn, id).await?;
+    Ok(true)
+}
+
+pub async fn versions(conn: &mut SqliteConnection, id: ProposalId) -> Result<Vec<ProposalVersion>> {
+    sqlx::query("SELECT * FROM proposal_versions WHERE proposal_id = ? ORDER BY revision DESC")
+        .bind(id.to_string())
+        .fetch_all(conn)
+        .await?
+        .iter()
+        .map(|r| {
+            Ok(ProposalVersion {
+                revision: r.try_get("revision")?,
+                summary: r.try_get("summary")?,
+                changes: codec::json(r, "changes_json")?,
+                created_at: r.try_get("created_at")?,
+            })
+        })
+        .collect()
 }
 
 pub async fn get(conn: &mut SqliteConnection, id: ProposalId) -> Result<Option<Proposal>> {
@@ -89,6 +133,7 @@ fn from_row(row: &SqliteRow) -> Result<Proposal> {
         session_id: codec::id(row, "session_id")?,
         evidence_turn_ids: codec::json(row, "evidence_json")?,
         summary: row.try_get("summary")?,
+        revision: row.try_get("revision")?,
         changes: codec::json(row, "changes_json")?,
         status: codec::from_tag(row, "status")?,
         commit_id: codec::opt_id(row, "commit_id")?,

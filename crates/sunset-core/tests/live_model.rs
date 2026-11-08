@@ -81,7 +81,10 @@ async fn live_tutor_curator_approve_restart_undo() {
         app.concepts().await.unwrap().is_empty(),
         "pending changes must remain private to review"
     );
-    let committed = app.approve_proposal(proposal.id).await.unwrap();
+    let committed = app
+        .approve_proposal(proposal.id, proposal.revision)
+        .await
+        .unwrap();
     assert_eq!(committed.status, ProposalStatus::Committed);
     assert!(!app.concepts().await.unwrap().is_empty());
     assert!(app.turns(sent.session_id).await.unwrap().len() >= 2);

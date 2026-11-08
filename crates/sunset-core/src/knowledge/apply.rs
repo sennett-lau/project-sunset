@@ -3,18 +3,20 @@
 use std::collections::HashMap;
 
 use sunset_domain::{
-    AppEvent, ConceptId, Proposal, ProposalId, ProposalStatus, ProposedChange, RevisionId, slugify,
+    AppEvent, ConceptId, Proposal, ProposalEdit, ProposalId, ProposalStatus, ProposedChange,
+    RevisionId, slugify,
 };
 use sunset_store::Tx;
 use sunset_store::repo::{commits, knowledge as kn, proposals};
 
 use crate::{CoreError, Result, Sunset};
 
-pub async fn approve(app: &Sunset, id: ProposalId) -> Result<Proposal> {
+pub async fn approve(app: &Sunset, id: ProposalId, expected_revision: u32) -> Result<Proposal> {
     let _guard = app.inner.knowledge_lock.lock().await;
     let inner = &app.inner;
     let mut tx = inner.store.begin().await?;
     let proposal = load(&mut tx, id).await?;
+    check_pending_revision(&proposal, expected_revision)?;
     let commit = commits::insert(&mut tx, inner.user, id, None).await?;
     if !proposals::transition(
         &mut tx,
@@ -41,11 +43,12 @@ pub async fn approve(app: &Sunset, id: ProposalId) -> Result<Proposal> {
     Ok(updated)
 }
 
-pub async fn reject(app: &Sunset, id: ProposalId) -> Result<Proposal> {
+pub async fn reject(app: &Sunset, id: ProposalId, expected_revision: u32) -> Result<Proposal> {
     let _guard = app.inner.knowledge_lock.lock().await;
     let inner = &app.inner;
     let mut tx = inner.store.begin().await?;
     let proposal = load(&mut tx, id).await?;
+    check_pending_revision(&proposal, expected_revision)?;
     if !proposals::transition(
         &mut tx,
         id,
@@ -101,7 +104,58 @@ pub async fn undo(app: &Sunset, id: ProposalId) -> Result<Proposal> {
 
 /// Commit a just-created proposal without asking (auto-save mode).
 pub async fn auto_commit(app: &Sunset, id: ProposalId) -> Result<Proposal> {
-    approve(app, id).await
+    approve(app, id, 0).await
+}
+
+pub async fn edit(app: &Sunset, id: ProposalId, edit: ProposalEdit) -> Result<Proposal> {
+    let _guard = app.inner.knowledge_lock.lock().await;
+    let inner = &app.inner;
+    let mut tx = inner.store.begin().await?;
+    let original = load(&mut tx, id).await?;
+    check_pending_revision(&original, edit.expected_revision)?;
+    if original.revision == u32::MAX {
+        return Err(CoreError::Conflict(
+            "proposal has too many revisions".into(),
+        ));
+    }
+    let draft = super::curator::ProposalDraft {
+        summary: edit.summary,
+        changes: edit.changes,
+    };
+    let names = super::validate::NameIndex::new(&kn::live_concepts(&mut tx, inner.user).await?);
+    // Validate exactly what the learner reviewed; do not silently normalize edited targets.
+    super::validate::draft(&draft, &names).map_err(CoreError::Invalid)?;
+    if !proposals::edit(
+        &mut tx,
+        id,
+        edit.expected_revision,
+        &draft.summary,
+        &draft.changes,
+    )
+    .await?
+    {
+        return Err(CoreError::Conflict(
+            "proposal changed; reload before editing".into(),
+        ));
+    }
+    let updated = load(&mut tx, id).await?;
+    tx.commit().await?;
+    inner.bus.emit(AppEvent::ProposalUpdated {
+        proposal: updated.clone(),
+    });
+    Ok(updated)
+}
+
+fn check_pending_revision(p: &Proposal, expected: u32) -> Result<()> {
+    if p.status != ProposalStatus::AwaitingApproval {
+        return Err(conflict(p, "changed"));
+    }
+    if p.revision != expected {
+        return Err(CoreError::Conflict(
+            "proposal changed since you opened it; review the latest version".into(),
+        ));
+    }
+    Ok(())
 }
 
 async fn load(tx: &mut Tx, id: ProposalId) -> Result<Proposal> {

@@ -28,9 +28,30 @@ pub struct Proposal {
     pub evidence_turn_ids: Vec<TurnId>,
     pub summary: String,
     pub changes: Vec<ProposedChange>,
+    /// Optimistic concurrency token for edits, approval and rejection.
+    pub revision: u32,
     pub status: ProposalStatus,
     /// Set once committed; undo targets this commit.
     pub commit_id: Option<CommitId>,
+    pub created_at: Timestamp,
+}
+
+/// Editable content only. Evidence, session, identity and lifecycle stay core-owned.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProposalEdit {
+    pub expected_revision: u32,
+    pub summary: String,
+    pub changes: Vec<ProposedChange>,
+}
+
+/// Immutable snapshot of the original proposal or a learner edit.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ProposalVersion {
+    pub revision: u32,
+    pub summary: String,
+    pub changes: Vec<ProposedChange>,
     pub created_at: Timestamp,
 }
 

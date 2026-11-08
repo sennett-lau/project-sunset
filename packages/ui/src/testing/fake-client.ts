@@ -6,6 +6,7 @@ import type {
   ModelCapabilities,
   Proposal,
   ProposalId,
+  ProposalVersion,
   ProviderProfile,
   RoleAssignment,
   SaveMode,
@@ -22,6 +23,7 @@ export function createFakeClient(): SunsetClient {
   const listeners = new Set<(e: AppEvent) => void>();
   const emit = (e: AppEvent) => listeners.forEach((l) => l(e));
   const proposals: Proposal[] = [];
+  const versions = new Map<ProposalId, ProposalVersion[]>();
   const sessions: Session[] = [];
   const turns: Turn[] = [];
   let concepts: Concept[] = [];
@@ -80,11 +82,13 @@ export function createFakeClient(): SunsetClient {
             { op: "upsert_concept", slug: "variational-autoencoder", title: "Variational Autoencoder", aliases: ["VAE"] },
             { op: "add_observation", concept: "variational-autoencoder", kind: "question", source: "observed", note: `Asked: "${text}"` },
           ],
+          revision: 0,
           status: "awaiting_approval",
           commitId: null,
           createdAt: now(),
         };
         proposals.unshift(proposal);
+        versions.set(proposal.id, [{ revision: 0, summary: proposal.summary, changes: structuredClone(proposal.changes), createdAt: proposal.createdAt }]);
         emit({ type: "proposal_created", proposal: { ...proposal } });
       });
       return { sessionId: sid, userTurn, tutorTurnId };
@@ -98,16 +102,28 @@ export function createFakeClient(): SunsetClient {
     async recentProposals(limit) {
       return proposals.slice(0, limit).map((p) => ({ ...p }));
     },
-    async approveProposal(pid) {
+    async editProposal(pid, edit) {
       const p = find(pid);
+      if (p.status !== "awaiting_approval" || p.revision !== edit.expectedRevision) throw new Error("Proposal changed; review the latest version.");
+      if (!edit.summary.trim() || !edit.changes.length) throw new Error("A summary and at least one change are required.");
+      const patch = { summary: edit.summary, changes: structuredClone(edit.changes), revision: p.revision + 1 };
+      versions.get(pid)!.unshift({ ...patch, createdAt: now() });
+      return update(p, patch);
+    },
+    async proposalVersions(pid) { return structuredClone(versions.get(pid) ?? []); },
+    async approveProposal(pid, revision) {
+      const p = find(pid);
+      if (p.status !== "awaiting_approval" || p.revision !== revision) throw new Error("Proposal changed; review the latest version.");
       concepts = [{ id: id(), slug: "variational-autoencoder", title: "Variational Autoencoder", aliases: ["VAE"], createdAt: now() }];
       const commitId = id();
       const out = update(p, { status: "committed", commitId });
       emit({ type: "knowledge_changed", commitId });
       return out;
     },
-    async rejectProposal(pid) {
-      return update(find(pid), { status: "rejected" });
+    async rejectProposal(pid, revision) {
+      const p = find(pid);
+      if (p.status !== "awaiting_approval" || p.revision !== revision) throw new Error("Proposal changed; review the latest version.");
+      return update(p, { status: "rejected" });
     },
     async undoProposal(pid) {
       concepts = [];

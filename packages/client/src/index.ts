@@ -13,6 +13,8 @@ import type {
   ModelSettings,
   ProbeReport,
   Proposal,
+  ProposalEdit,
+  ProposalVersion,
   ProposalId,
   ProviderId,
   ProviderInput,
@@ -42,8 +44,10 @@ export interface SunsetClient {
   pendingProposals(): Promise<Proposal[]>;
   /** Newest first, any status. */
   recentProposals(limit: number): Promise<Proposal[]>;
-  approveProposal(id: ProposalId): Promise<Proposal>;
-  rejectProposal(id: ProposalId): Promise<Proposal>;
+  editProposal(id: ProposalId, edit: ProposalEdit): Promise<Proposal>;
+  proposalVersions(id: ProposalId): Promise<ProposalVersion[]>;
+  approveProposal(id: ProposalId, expectedRevision: number): Promise<Proposal>;
+  rejectProposal(id: ProposalId, expectedRevision: number): Promise<Proposal>;
   /** Undo a committed proposal. History is kept. */
   undoProposal(id: ProposalId): Promise<Proposal>;
 

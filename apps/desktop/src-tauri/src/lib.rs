@@ -28,6 +28,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::list_turns,
             commands::pending_proposals,
             commands::recent_proposals,
+            commands::edit_proposal,
+            commands::proposal_versions,
             commands::approve_proposal,
             commands::reject_proposal,
             commands::undo_proposal,

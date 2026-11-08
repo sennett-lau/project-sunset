@@ -13,6 +13,8 @@ export const tauriClient: SunsetClient = {
   listTurns: commands.listTurns,
   pendingProposals: commands.pendingProposals,
   recentProposals: commands.recentProposals,
+  editProposal: commands.editProposal,
+  proposalVersions: commands.proposalVersions,
   approveProposal: commands.approveProposal,
   rejectProposal: commands.rejectProposal,
   undoProposal: commands.undoProposal,
