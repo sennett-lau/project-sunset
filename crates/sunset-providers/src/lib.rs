@@ -6,6 +6,7 @@
 pub mod adapters;
 pub mod local;
 pub mod probe;
+mod reasoning;
 pub mod secrets;
 mod sse;
 pub mod structured;
