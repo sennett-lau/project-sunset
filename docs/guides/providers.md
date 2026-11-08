@@ -49,7 +49,8 @@ Type the model id (for Ollama, e.g. `qwen3:8b`; the list fills in when the serve
 Until a model is tested, the app uses the safest path: it streams if it can and puts the JSON
 schema in the prompt for the curator. After testing, the curator uses native JSON schema when
 supported, otherwise a forced tool call, otherwise the prompt. All output is still validated;
-invalid proposals are dropped, not saved.
+invalid output gets one corrective retry on the same model. If repair fails, a visible capture
+error is shown and nothing invalid is saved. Simple probes do not guarantee reliable curation.
 
 ## Privacy
 
@@ -58,6 +59,21 @@ invalid proposals are dropped, not saved.
 
 ## Example: a model on the Windows PC over Tailscale
 
-Run an OpenAI-compatible server there (Ollama with `OLLAMA_HOST=0.0.0.0`, or vLLM), then add a
-provider with base URL `http://100.90.208.26:11434/v1` (Ollama) or `http://100.90.208.26:8000/v1`
-(vLLM). It is labelled local because it is on your tailnet.
+The existing Oratype llama.cpp text server can also serve Sunset. Use the PC's Tailscale
+address with port `8181` and `/v1`, model `qwen3.5-4b-abliterated`, with no key if the
+server is configured without one. Set both Tutor and Curator to this model and test the
+connection. The ASR server on port `8180` is a speech service, not a tutor model.
+
+Sunset does not start, stop or install these services. Only connect over your private network.
+
+## Repeat the live text-loop check
+
+This opt-in integration test probes capabilities, streams a real answer, validates a real
+proposal, approves it, reopens the temporary library and undoes the change. It does not modify
+your regular library or provider settings.
+
+```sh
+SUNSET_TEST_BASE_URL=http://<tailscale-host>:8181/v1 \
+SUNSET_TEST_MODEL=qwen3.5-4b-abliterated \
+cargo test -p sunset-core --test live_model -- --ignored --nocapture
+```

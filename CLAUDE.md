@@ -11,11 +11,12 @@ approve, reject, edit or undo every change.
 
 ## Status
 
-**Phase 1 implemented; real-model check pending** (`docs/architecture.md` §8.2). Any
+**Phase 1 real-model loop verified; Phase 2 lexical retrieval + portability implemented**
+(`docs/architecture.md` §8.2–8.3). An
 OpenAI-compatible endpoint (Ollama, LM Studio, vLLM, OpenAI, OpenRouter, ...) can serve the
 `tutor` and `curator` roles; set them up under **Models** (`docs/guides/providers.md`). Until then
-the built-in Demo provider answers "What is a VAE?" offline. Phase 2 (retrieval, vault mirror) is
-next.
+the built-in Demo provider answers "What is a VAE?" offline. Phase 2 embeddings and the Phase 3
+voice spike remain. See `docs/guides/readiness.md` for the explicit feature audit.
 
 ## Read these first
 
@@ -51,8 +52,19 @@ next.
 - **The fast path never waits on the slow path:** the tutor reply must not block on curation or
   background jobs.
 
+- **Structured-output property order matters.** Keep `serde_json/preserve_order` enabled and
+  emit union discriminants (`op`, `kind`) before arguments. The llama.cpp live-model check
+  exposed repetitive or semantically invalid output with alphabetically ordered properties.
+- The vault is derived output, with private notes under `.private_overlay/`. Use the public
+  export command to share; never copy the complete vault as a public export. Preserve edited
+  and unmanaged mirror files and surface conflicts. Export snapshots always use a new folder.
+
 ## Conventions
 
+- Commit incrementally as each coherent piece is implemented and checked. Keep commits small,
+  focused and dependency-ordered; avoid accumulating a whole development phase in one commit.
+  Verify the repo's author/committer identity before committing. Local commits do not authorize
+  pushing or creating a PR; obtain explicit permission for each publication scope.
 - Rust: workspace at repo root, crates under `crates/`. `cargo fmt` and `cargo clippy -- -D warnings`
   must pass.
 - Frontend: pnpm workspace, TypeScript strict. Use pnpm, not npm or yarn. Do not disable pnpm's
@@ -102,3 +114,7 @@ window is blank even when the app works.
 
 Remote: `https://github.com/sennett-lau/project-sunset` (public). Use the `sennett-lau` account for all
 GitHub actions.
+
+Opt-in real-model test: set `SUNSET_TEST_BASE_URL` and `SUNSET_TEST_MODEL`, then run
+`cargo test -p sunset-core --test live_model -- --ignored --nocapture`. It uses an isolated
+temporary library, never the user's data.

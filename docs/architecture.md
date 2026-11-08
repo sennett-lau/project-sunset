@@ -441,8 +441,8 @@ source found or a correction offer, `[P2]` text, `[P3]` voice).
 | Phase | Goal | Exit |
 |---|---|---|
 | **0. Skeleton** | Workspace, Tauri shell, `SunsetClient`, SQLite schema + migrations (all canonical tables, including `visual_artifacts` and `learning_observations`), generated bindings, mock provider. | App opens; typing "What is a VAE?" streams a mock answer and creates one deterministic proposal (concept + article, relation, personal observation, `concept_flow` visual); approve/reject/undo changes the wiki. Covered by a Rust end-to-end test. |
-| **1. Real text loop** (implemented; real-model check pending) | OpenAI-compatible adapter, provider settings + Keychain, capability probe, streamed tutor answers, real curator proposals, wiki + focused graph. | Same loop with a real model (cloud *or* local Ollama), unchanged pipeline. |
-| **2. Retrieval + personal overlay** | FTS + embeddings, bounded context assembly, learning observations, Markdown vault mirror, export without private overlay. | Return days later; the tutor uses earlier concepts; export excludes private notes. |
+| **1. Real text loop** (real-model verified 2026-11-09) | OpenAI-compatible adapter, provider settings + Keychain, capability probe, streamed tutor answers, real curator proposals, wiki + focused graph. | Same loop with a real model (cloud *or* local Ollama), unchanged pipeline. |
+| **2. Retrieval + personal overlay** (lexical + portability implemented; embeddings pending) | FTS + embeddings, bounded context assembly, learning observations, Markdown vault mirror, export without private overlay. | Return days later; the tutor uses earlier concepts; export excludes private notes. |
 | **3. Voice spike** | One hosted voice path and one chained STT→LLM→TTS path behind the same turn contract. Cantonese benchmark set. | Spoken VAE conversation; reject a proposal by voice while talking. |
 | **4. Sources + visuals** | PDF ingestion via an external parser, citation anchors, typed diagram artifacts. | Paper-backed proposal with correct page reference. |
 | **Later** | `sunset-server`, sync, web client, sharing. | — |
@@ -466,7 +466,7 @@ source found or a correction offer, `[P2]` text, `[P3]` voice).
   curator JSON schema is a placeholder until it is derived from the Rust types.
 - Rust minimum is 1.94 (required by sqlx 0.9); the pinned toolchain is 1.98.1.
 
-### 8.2 Phase 1 notes (implemented 2026-11-08; real-model run pending)
+### 8.2 Phase 1 notes (implemented 2026-11-08; real-model verified 2026-11-09)
 
 - **Providers and roles** live in SQLite (`providers`, `role_assignments`, `model_capabilities`,
   migration 0002). A built-in `demo` provider is created on first run and every unassigned role
@@ -487,10 +487,32 @@ source found or a correction offer, `[P2]` text, `[P3]` voice).
   react-markdown with `[[wikilinks]]` (no raw HTML, external links do not navigate), focused
   Cytoscape.js graph loaded lazily.
 - **Tests:** `crates/sunset-core/tests/phase1_real_provider.rs` drives the loop through the real
-  adapter against a local fake OpenAI server. The exit criterion with a real model (Ollama or a
-  cloud API) is still to be run by hand: see `docs/guides/providers.md`.
-- **Known gaps:** no context-window probe; `<think>` text from reasoning models that put it in
-  `content` is shown in tutor answers; curator prompt sees at most 300 existing concepts.
+  adapter against a local fake OpenAI server. The opt-in `live_model.rs` also passed against
+  Qwen3.5 4B on llama.cpp over Tailscale, including approve, restart and undo.
+- **Provider hardening:** leading `<think>` blocks are filtered across chunk boundaries; empty,
+  interrupted and output-limited answers fail visibly. Generations have output caps. JSON schemas
+  preserve property order with `op`/`kind` first for grammar-based servers. Curator validation
+  covers shape and semantic references, with one repair attempt on the same model; no provider switch.
+- **Known gaps:** no context-window probe; curator prompt sees at most 300 existing concepts.
+
+### 8.3 Phase 2 increment (2026-11-09)
+
+- SQLite FTS5 trigrams index current approved titles, aliases, summaries and article bodies.
+  Short terms use literal substring matching for CJK support. Private notes and pending/retracted
+  content are excluded. This is lexical retrieval, not semantic search.
+- Tutor context includes relevant approved knowledge and a separately labelled private overlay.
+  Character budgets: history 24,000; public knowledge 8,000; private observations 2,000. These
+  are conservative application bounds, not a measured provider token window.
+- The one-way mirror lives at `<data_dir>/vault`; private observations live only in its
+  `.private_overlay` subdirectory. Commit, undo and startup resynchronize derived files.
+  Durable write intent handles interrupted renames. Edited/unmanaged files remain untouched
+  and conflicts are reported. No-follow directory-relative I/O prevents symlink traversal.
+- Public exports are rendered directly from SQLite and written to a fresh
+  `<data_dir>/exports/<UUID>` snapshot. They exclude private observations and transcripts.
+  Filenames include the concept ID to avoid slug/case collisions; relation wikilinks match them.
+- The client exposes search, conversation sessions/history, vault status/retry and public export.
+- Deferred: embeddings/vector retrieval, classifier role, model-specific token budgeting,
+  configurable vault locations and two-way Markdown editing.
 
 ---
 
