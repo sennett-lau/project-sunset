@@ -1,0 +1,13 @@
+@import "tailwindcss";
+/* Scan this package for class names; it lives outside the app's Vite root. */
+@source "./";
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang HK", sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
