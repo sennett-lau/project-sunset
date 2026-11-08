@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 /* Scan this package for class names; it lives outside the app's Vite root. */
 @source "./";
 

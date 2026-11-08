@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
+import { Markdown } from "../wiki/Markdown";
 import type { ConversationState } from "./useConversation";
 
 export function Conversation({ state }: { state: ConversationState }) {
@@ -35,11 +36,11 @@ export function Conversation({ state }: { state: ConversationState }) {
         {state.messages.map((m) => (
           <div key={m.id} className={m.speaker === "user" ? "flex justify-end" : ""}>
             <div
-              className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 leading-relaxed ${
-                m.speaker === "user" ? "bg-orange-100" : "bg-white shadow-sm"
+              className={`max-w-[85%] rounded-2xl px-4 py-2.5 leading-relaxed ${
+                m.speaker === "user" ? "whitespace-pre-wrap bg-orange-100" : "bg-white shadow-sm"
               }`}
             >
-              {m.text}
+              {m.speaker === "user" ? m.text : <Markdown source={m.text} className="prose-sm" />}
               {m.pending && <span className="ml-0.5 animate-pulse">▍</span>}
               {m.error && <p className="mt-1 text-sm text-red-700">Could not answer: {m.error}</p>}
             </div>

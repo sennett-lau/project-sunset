@@ -1,39 +1,64 @@
-import { Fragment, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
+import remarkGfm from "remark-gfm";
+
+const WIKI = "wiki:";
 
 /**
- * Small, safe Markdown subset for Phase 0: `## headings`, paragraphs, `**bold**` and
- * `[[slug]]` links. Builds React elements only; never injects HTML.
+ * Markdown for articles and tutor answers. Raw HTML is never rendered (react-markdown
+ * default). `[[slug]]` and `[[slug|label]]` become wiki links. External links are shown but do
+ * not navigate the app window.
  */
-export function Markdown({ source, onLink }: { source: string; onLink: (slug: string) => void }) {
-  const blocks = source.split(/\n{2,}/).filter((b) => b.trim());
+export function Markdown({
+  source,
+  onLink,
+  className = "",
+}: {
+  source: string;
+  onLink?: (slug: string) => void;
+  className?: string;
+}) {
   return (
-    <div className="space-y-3 leading-relaxed">
-      {blocks.map((block, i) => {
-        const heading = /^(#{1,3})\s+(.*)$/.exec(block.trim());
-        if (heading) {
-          return (
-            <h3 key={i} className="pt-2 font-semibold">
-              {inline(heading[2] ?? "", onLink)}
-            </h3>
-          );
-        }
-        return <p key={i}>{inline(block, onLink)}</p>;
-      })}
+    <div className={`prose prose-stone max-w-none prose-headings:font-semibold ${className}`}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        urlTransform={(url) => (url.startsWith(WIKI) ? url : defaultUrlTransform(url))}
+        components={{
+          a: ({ href, children }) => <Link href={href} onLink={onLink}>{children}</Link>,
+          img: ({ alt }) => <span className="text-stone-500">[image: {alt}]</span>,
+        }}
+      >
+        {wikiLinks(source)}
+      </ReactMarkdown>
     </div>
   );
 }
 
-function inline(text: string, onLink: (slug: string) => void): ReactNode[] {
-  return text.split(/(\*\*[^*]+\*\*|\[\[[^\]]+\]\])/g).map((part, i) => {
-    if (part.startsWith("**") && part.endsWith("**")) return <strong key={i}>{part.slice(2, -2)}</strong>;
-    if (part.startsWith("[[") && part.endsWith("]]")) {
-      const slug = part.slice(2, -2);
-      return (
-        <button key={i} onClick={() => onLink(slug)} className="text-orange-700 underline decoration-dotted">
-          {slug.replaceAll("-", " ")}
-        </button>
-      );
-    }
-    return <Fragment key={i}>{part}</Fragment>;
+function Link({ href, onLink, children }: { href?: string; onLink?: (slug: string) => void; children: ReactNode }) {
+  if (href?.startsWith(WIKI)) {
+    const slug = decodeURIComponent(href.slice(WIKI.length));
+    return (
+      <button
+        type="button"
+        onClick={() => onLink?.(slug)}
+        className="text-orange-700 underline decoration-dotted"
+      >
+        {children}
+      </button>
+    );
+  }
+  return (
+    <span className="underline decoration-stone-400" title={href}>
+      {children}
+    </span>
+  );
+}
+
+/** `[[slug]]` → `[slug words](wiki:slug)`; `[[slug|label]]` → `[label](wiki:slug)`. */
+export function wikiLinks(source: string): string {
+  return source.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, slug: string, label?: string) => {
+    const s = slug.trim();
+    const text = (label ?? s.replaceAll("-", " ")).replace(/[[\]]/g, "");
+    return `[${text}](${WIKI}${encodeURIComponent(s)})`;
   });
 }
