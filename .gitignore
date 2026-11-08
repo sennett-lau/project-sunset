@@ -1,0 +1,26 @@
+# OS / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# Rust
+target/
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Env and secrets (API keys belong in the macOS Keychain, never in the repo)
+.env
+.env.*
+!.env.example
+
+# Local app data used during development
+*.sqlite
+*.sqlite-*
+*.db
+vault/
