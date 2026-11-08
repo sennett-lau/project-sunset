@@ -1,3 +1,4 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -37,7 +38,7 @@ pub struct Proposal {
 /// create a concept and link to it in the same bundle.
 ///
 /// This is also the shape the curator model must emit, so field names are kept plain.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type, JsonSchema)]
 #[serde(tag = "op", rename_all = "snake_case", rename_all_fields = "camelCase")]
 pub enum ProposedChange {
     /// Create the concept if no concept has this slug; otherwise add missing aliases.

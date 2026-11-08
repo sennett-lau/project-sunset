@@ -71,6 +71,8 @@ id_types! {
     ProposalId,
     CommitId,
     JobId,
+    /// A configured model endpoint (docs/architecture.md §4.3).
+    ProviderId,
 }
 
 #[cfg(test)]

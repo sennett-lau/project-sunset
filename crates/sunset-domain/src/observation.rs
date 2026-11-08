@@ -1,3 +1,4 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -5,7 +6,7 @@ use crate::{ConceptId, ObservationId, Timestamp, TurnId};
 
 /// What a personal-overlay entry records. Self-check questions are deliberately absent: they
 /// are not in v1 (docs/architecture.md §3).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ObservationKind {
     /// A question the learner asked about this concept.
@@ -19,7 +20,7 @@ pub enum ObservationKind {
 }
 
 /// Where an observation came from (initial spec Part I §8.3).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ObservationSource {
     SelfReported,

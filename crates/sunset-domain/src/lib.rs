@@ -11,6 +11,7 @@ mod identity;
 mod ids;
 mod observation;
 mod proposal;
+mod provider;
 mod relation;
 mod session;
 mod settings;
@@ -23,11 +24,15 @@ pub use concept::{Concept, slugify};
 pub use events::AppEvent;
 pub use identity::{AppIdentity, IdentityError};
 pub use ids::{
-    ArtifactId, CommitId, ConceptId, JobId, ObservationId, ProposalId, RelationId, RevisionId,
-    SessionId, TurnId, UserId,
+    ArtifactId, CommitId, ConceptId, JobId, ObservationId, ProposalId, ProviderId, RelationId,
+    RevisionId, SessionId, TurnId, UserId,
 };
 pub use observation::{LearningObservation, ObservationKind, ObservationSource};
 pub use proposal::{Proposal, ProposalStatus, ProposedChange};
+pub use provider::{
+    CapabilityStatus, ModelCapabilities, ModelSettings, ProbeReport, ProviderInput, ProviderKind,
+    ProviderProfile, Role, RoleAssignment,
+};
 pub use relation::{Relation, RelationKind};
 pub use session::{Session, Speaker, Turn};
 pub use settings::SaveMode;

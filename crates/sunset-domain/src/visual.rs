@@ -1,6 +1,7 @@
 //! Teaching visuals as typed data. The model never writes HTML or JavaScript; the UI renders
 //! each `kind` with a trusted component. See docs/architecture.md §3.1.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -20,7 +21,7 @@ pub struct VisualArtifact {
     pub created_at: Timestamp,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type, JsonSchema)]
 #[serde(
     tag = "kind",
     rename_all = "snake_case",
@@ -53,20 +54,20 @@ pub enum VisualPayload {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type, JsonSchema)]
 pub struct FlowNode {
     pub id: String,
     pub label: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type, JsonSchema)]
 pub struct FlowEdge {
     pub source: String,
     pub target: String,
     pub label: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PlotType {
     Line,
@@ -74,27 +75,27 @@ pub enum PlotType {
     Bar,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type, JsonSchema)]
 pub struct DataSeries {
     pub name: String,
     pub points: Vec<PlotPoint>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type, JsonSchema)]
 pub struct PlotPoint {
     pub x: f64,
     pub y: f64,
 }
 
 /// Built-in interactive demos. Add a variant together with its React component.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExplorerPreset {
     /// 1-D Gaussian; params `mean` and `std_dev`.
     Gaussian1d,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type, JsonSchema)]
 pub struct SliderParam {
     pub id: String,
     pub label: String,
@@ -104,7 +105,7 @@ pub struct SliderParam {
     pub default: f64,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type, JsonSchema)]
 pub struct EquationStep {
     /// LaTeX, rendered with KaTeX.
     pub latex: String,
