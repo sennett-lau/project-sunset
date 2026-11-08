@@ -408,12 +408,23 @@ model output.
 
 ---
 
-## 9. Open decisions
+## 9. Defaults and open decisions
 
-1. React vs another UI framework in the webview (React assumed; the initial spec's Cytoscape.js and
-   Markdown rendering choices fit it).
-2. `specta`/`tauri-specta` vs `ts-rs` for generated TypeScript bindings.
-3. Voice capture location: Rust (`cpal`) vs webview.
-4. Minimum macOS version and Apple Silicon only vs universal binary.
-5. Open-source license.
-6. Product decisions still open in initial spec Part I §22.
+**Defaults (chosen 2026-11-08, easy to change before much UI exists):**
+
+| Area | Default |
+|---|---|
+| UI | React + Vite + TypeScript (strict) |
+| State | TanStack Query (backend data) + Zustand (UI state) |
+| Styling | Tailwind CSS |
+| Graph | Cytoscape.js |
+| TypeScript bindings | `specta` / `tauri-specta` |
+| Product name / bundle id | `Sunset` / `dev.sennett.sunset`, **temporary** (§2.7) |
+
+**Open:**
+
+1. Final product name and bundle id (before the first release; §2.7).
+2. Voice capture location: Rust (`cpal`) vs webview.
+3. Minimum macOS version and Apple Silicon only vs universal binary.
+4. Open-source license.
+5. Product decisions still open in initial spec Part I §22.
