@@ -71,6 +71,8 @@ impl ChatRequest {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChatResponse {
     pub content: String,
+    /// The content came from a forced tool call (the structured-output fallback).
+    pub via_tool_call: bool,
 }
 
 /// One streamed chunk of text.
@@ -88,6 +90,7 @@ pub enum Capability {
     NeedsTest,
 }
 
+/// Unknown capabilities default to `NeedsTest`; adapters then take the safest path.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ChatCapabilities {
     pub streaming: Capability,

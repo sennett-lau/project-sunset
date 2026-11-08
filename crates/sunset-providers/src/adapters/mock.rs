@@ -60,6 +60,7 @@ impl ChatModel for MockChatModel {
     async fn complete(&self, request: ChatRequest) -> Result<ChatResponse> {
         Ok(ChatResponse {
             content: (self.responder)(&request),
+            via_tool_call: false,
         })
     }
 

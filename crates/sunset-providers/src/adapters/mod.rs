@@ -1,3 +1,4 @@
-//! Concrete providers. Phase 0 has only the mock; `openai_compat` arrives in Phase 1.
+//! Concrete providers.
 
 pub mod mock;
+pub mod openai_compat;
