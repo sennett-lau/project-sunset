@@ -11,9 +11,11 @@ approve, reject, edit or undo every change.
 
 ## Status
 
-**Phase 0 done; Phase 1 next** (`docs/architecture.md` §8). The full loop runs on scripted mock
-models: ask "What is a VAE?", watch the answer stream, approve / reject / undo the proposal, see
-the wiki and graph change. No real model is connected yet.
+**Phase 1 implemented; real-model check pending** (`docs/architecture.md` §8.2). Any
+OpenAI-compatible endpoint (Ollama, LM Studio, vLLM, OpenAI, OpenRouter, ...) can serve the
+`tutor` and `curator` roles; set them up under **Models** (`docs/guides/providers.md`). Until then
+the built-in Demo provider answers "What is a VAE?" offline. Phase 2 (retrieval, vault mirror) is
+next.
 
 ## Read these first
 
@@ -42,8 +44,9 @@ the wiki and graph change. No real model is connected yet.
 - **SQLite (`sqlx`) is the source of truth.** No PostgreSQL, no graph database. The Markdown vault is
   a one-way mirror. Private learning observations never go into shareable articles or exports.
 - **IDs are UUIDv7.**
-- **Secrets go in the macOS Keychain** (`keyring` crate). Never in SQLite, config files, logs, the
-  repo, or the webview.
+- **Secrets go in the macOS Keychain** (`SecretStore` in `sunset-providers`, backed by
+  `keyring-core` + `apple-native-keyring-store`). Never in SQLite, config files, logs, the repo,
+  or sent back to the webview (the settings form may send a key in, never read one out).
 - **No silent fallback** from a local provider to a cloud provider.
 - **The fast path never waits on the slow path:** the tutor reply must not block on curation or
   background jobs.
@@ -84,12 +87,16 @@ Run from the repo root.
 | `pnpm test` | UI tests only (Vitest) |
 | `pnpm gen:bindings` | Regenerate `packages/bindings` from the Rust commands and types |
 | `pnpm identity:sync` | Copy `app-identity.json` into files that need a literal copy |
-| `cargo test --workspace` | Rust tests only. `crates/sunset-core/tests/phase0_loop.rs` is the end-to-end loop test |
+| `cargo test --workspace` | Rust tests only. `crates/sunset-core/tests/phase0_loop.rs` and `phase1_real_provider.rs` are the end-to-end loop tests |
 
 Rust version is pinned in `rust-toolchain.toml`; rustup installs it automatically.
 
 App data in development: `~/Library/Application Support/dev.sennett.sunset/library.sqlite`. Delete
-the folder to start from an empty library.
+the folder to start from an empty library. API keys are in the login keychain under service
+`dev.sennett.sunset`.
+
+The webview does not paint while the window is hidden or covered, so a screenshot of a background
+window is blank even when the app works.
 
 ## GitHub
 

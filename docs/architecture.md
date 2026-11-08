@@ -83,12 +83,11 @@ crates/sunset-domain/src/
 ```text
 crates/sunset-providers/src/
 ├── traits.rs        # ChatModel, Embedder; later SpeechToText, TextToSpeech, RealtimeVoice
-├── types.rs         # ChatRequest, ChatDelta, ToolCall, Usage
-├── config.rs        # ProviderConfig (kind, base_url, keychain reference)
-├── roles.rs         # tutor / curator / classifier / embedder → provider + model
-├── probe.rs         # [P1] Test connection: tool calling, JSON schema, context window
-├── structured.rs    # [P1] JSON schema → tool call → plain JSON, serde validation + one retry
-├── secrets.rs       # [P1] macOS Keychain (keyring crate)
+├── types.rs         # ChatRequest, ChatDelta, ChatCapabilities
+├── probe.rs         # [P1] Test connection: basic request, streaming, JSON schema, tool calls
+├── structured.rs    # [P1] find the JSON in a reply (reasoning blocks, code fences)
+├── secrets.rs       # [P1] SecretStore; macOS Keychain (keyring-core + apple-native store)
+├── local.rs         # [P1] is a base URL local (this Mac, LAN, tailnet)?
 ├── sse.rs           # [P1] streaming SSE parser
 └── adapters/
     ├── mock.rs           # [P0] deterministic answers for tests and Phase 0
@@ -421,8 +420,8 @@ Background results reach the user on two channels with different timing:
   carry `{session_id, topic_version, turn_id, job_id}` and are re-checked on release; stale ones
   go to activity history instead (initial spec Part II §5.4).
 
-Phase 0 has only the quiet channel. The queue arrives with the first active notice (`[P1]` text,
-`[P3]` voice).
+Phases 0–1 have only the quiet channel. The queue arrives with the first active notice (likely a
+source found or a correction offer, `[P2]` text, `[P3]` voice).
 
 ---
 
@@ -442,7 +441,7 @@ Phase 0 has only the quiet channel. The queue arrives with the first active noti
 | Phase | Goal | Exit |
 |---|---|---|
 | **0. Skeleton** | Workspace, Tauri shell, `SunsetClient`, SQLite schema + migrations (all canonical tables, including `visual_artifacts` and `learning_observations`), generated bindings, mock provider. | App opens; typing "What is a VAE?" streams a mock answer and creates one deterministic proposal (concept + article, relation, personal observation, `concept_flow` visual); approve/reject/undo changes the wiki. Covered by a Rust end-to-end test. |
-| **1. Real text loop** | OpenAI-compatible adapter, provider settings + Keychain, capability probe, streamed tutor answers, real curator proposals, wiki + focused graph. | Same loop with a real model (cloud *or* local Ollama), unchanged pipeline. |
+| **1. Real text loop** (implemented; real-model check pending) | OpenAI-compatible adapter, provider settings + Keychain, capability probe, streamed tutor answers, real curator proposals, wiki + focused graph. | Same loop with a real model (cloud *or* local Ollama), unchanged pipeline. |
 | **2. Retrieval + personal overlay** | FTS + embeddings, bounded context assembly, learning observations, Markdown vault mirror, export without private overlay. | Return days later; the tutor uses earlier concepts; export excludes private notes. |
 | **3. Voice spike** | One hosted voice path and one chained STT→LLM→TTS path behind the same turn contract. Cantonese benchmark set. | Spoken VAE conversation; reject a proposal by voice while talking. |
 | **4. Sources + visuals** | PDF ingestion via an external parser, citation anchors, typed diagram artifacts. | Paper-backed proposal with correct page reference. |
@@ -466,6 +465,32 @@ Phase 0 has only the quiet channel. The queue arrives with the first active noti
   Markdown is a tiny safe subset; an existing concept's aliases are not merged on upsert; the
   curator JSON schema is a placeholder until it is derived from the Rust types.
 - Rust minimum is 1.94 (required by sqlx 0.9); the pinned toolchain is 1.98.1.
+
+### 8.2 Phase 1 notes (implemented 2026-11-08; real-model run pending)
+
+- **Providers and roles** live in SQLite (`providers`, `role_assignments`, `model_capabilities`,
+  migration 0002). A built-in `demo` provider is created on first run and every unassigned role
+  points at it, so the app works before any model is set up. Roles in v1: `tutor`, `curator`
+  (`classifier` and `embedder` arrive with Phase 2).
+- **Adapter:** one OpenAI-compatible adapter on `reqwest` (native TLS) with our own SSE parser.
+  Structured output follows the probe: JSON schema → forced tool call → schema in the prompt.
+  Untested models get the prompt path. A model whose streaming is `unsupported` gets one chunk.
+- **Secrets:** `keyring-core` + `apple-native-keyring-store` (the `keyring` crate's v4 split),
+  behind a `SecretStore` trait so tests use memory. `has_api_key` is the only trace in SQLite.
+- **Curator:** the JSON schema is generated from `CuratorOutput` with `schemars`; the request
+  lists existing concepts with aliases. Replies may contain `<think>` blocks or fences. Names are
+  normalized before validation (`NameIndex`): a synonym of an existing concept reuses it, and
+  new names become rows in `concept_aliases`, undone with their commit.
+- **No fallback:** a failing role surfaces `tutor_failed` / `job_failed`; nothing is re-sent
+  elsewhere.
+- **UI:** Models panel (providers, keys write-only, roles, Test connection, local/cloud labels),
+  react-markdown with `[[wikilinks]]` (no raw HTML, external links do not navigate), focused
+  Cytoscape.js graph loaded lazily.
+- **Tests:** `crates/sunset-core/tests/phase1_real_provider.rs` drives the loop through the real
+  adapter against a local fake OpenAI server. The exit criterion with a real model (Ollama or a
+  cloud API) is still to be run by hand: see `docs/guides/providers.md`.
+- **Known gaps:** no context-window probe; `<think>` text from reasoning models that put it in
+  `content` is shown in tutor answers; curator prompt sees at most 300 existing concepts.
 
 ---
 

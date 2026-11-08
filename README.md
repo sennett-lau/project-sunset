@@ -8,8 +8,9 @@ private notes about how you learn. You stay in control: approve, reject, edit, o
 
 Think of it as a personal Wikipedia that grows from your conversations.
 
-> **Status:** Phase 0 done. The whole learning loop runs on scripted mock models (try "What is a
-> VAE?"). Connecting real models is Phase 1.
+> **Status:** Phase 1. Connect any OpenAI-compatible model (Ollama, LM Studio, vLLM, OpenAI,
+> OpenRouter, ...) under **Models**; see [`docs/guides/providers.md`](docs/guides/providers.md).
+> Without one, a built-in demo model answers "What is a VAE?" offline.
 >
 > "Sunset" is a working name. The product name and bundle id live in
 > [`app-identity.json`](app-identity.json) and will change before the first release.
