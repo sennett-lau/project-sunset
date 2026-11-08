@@ -33,13 +33,14 @@ optional API key.
 |---|---|---|
 | Tutor | Answers you, streamed | The best model you can run or afford |
 | Curator | Turns each exchange into proposed wiki updates, in the background | Reliable JSON output |
+| Speech recognition (optional) | Transcribes a recording into a draft | An audio model accepting WAV at `/audio/transcriptions` |
 
 Type the model id (for Ollama, e.g. `qwen3:8b`; the list fills in when the server supports
 `GET /v1/models`), then **Use this model**.
 
 ## 3. Test connection
 
-**Test connection** sends four small requests and records what the model supports:
+For Tutor and Curator, **Test connection** sends four small requests and records what the model supports:
 
 1. a basic request;
 2. streaming;
@@ -66,6 +67,25 @@ connection. The ASR server on port `8180` is a speech service, not a tutor model
 
 Sunset does not start, stop or install these services. Only connect over your private network.
 
+## Voice input
+
+Add the PC's speech endpoint using port `8180` and `/v1`. Under **Speech recognition**, select
+that provider and model `qwen3-asr`, then **Use for speech**. Speech has no Demo assignment and
+does not use the chat capability probe. **Disable speech** cancels recording/transcription and
+removes the optional assignment; you can then remove its provider if no other role uses it.
+
+Choose **Record a question**, allow microphone access when macOS asks, speak, then stop.
+The recording is sent to the selected speech provider and its text is appended to your draft.
+Review and correct it before pressing **Send**. The tutor currently replies in text.
+
+Recordings last at most two minutes. **Cancel** stops capture or discards an in-flight transcription;
+it cannot retract audio that has already reached the provider. Audio is held in memory and is not
+saved in the library. Changing the selected provider does not redirect an active recording.
+If access is denied, enable this app under System Settings → Privacy & Security → Microphone.
+
+Microphone capture/permissions still require a physical-device test. Automated checks cover audio
+processing and UI lifecycle; live service checks use synthetic recordings, not your microphone.
+
 ## Repeat the live text-loop check
 
 This opt-in integration test probes capabilities, streams a real answer, validates a real
@@ -77,3 +97,8 @@ SUNSET_TEST_BASE_URL=http://<tailscale-host>:8181/v1 \
 SUNSET_TEST_MODEL=qwen3.5-4b-abliterated \
 cargo test -p sunset-core --test live_model -- --ignored --nocapture
 ```
+
+To include speech recognition, also set `SUNSET_TEST_STT_URL`, `SUNSET_TEST_STT_MODEL` and
+`SUNSET_TEST_WAV` to a synthetic/public WAV fixture. Set `SUNSET_TEST_TRANSCRIPT_CONTAINS` to an
+expected phrase to reject an incorrect fixture/transcript before starting the tutor. The lower-level
+`cargo test -p sunset-providers --test live_speech -- --ignored --nocapture` checks transcription alone.

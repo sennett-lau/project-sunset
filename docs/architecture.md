@@ -363,7 +363,8 @@ A **role** maps a job to a provider + model. Users configure roles, not one glob
 | `curator` | Turn stable turns into structured proposals | Mid/strong model with reliable structured output |
 | `classifier` | Cheap yes/no gates ("worth capturing?", "is this a rejection?") | Small local model |
 | `embedder` | Embeddings for retrieval | Local or cloud embedding model |
-| `stt` / `tts` / `voice` | Later | See initial spec Part II §3.5–3.6 |
+| `stt` | Optional native voice input | OpenAI-compatible `/audio/transcriptions`; no default assignment |
+| `tts` / `voice` | Later | See initial spec Part II §3.5–3.6 |
 
 ### 4.4 Capability probing, not assumptions
 
@@ -425,14 +426,23 @@ source found or a correction offer, `[P2]` text, `[P3]` voice).
 
 ---
 
-## 7. Voice (deferred, notes only)
+## 7. Voice input increment (2026-11-09)
 
-- Audio capture in Rust with `cpal` keeps one code path for local STT and avoids webview
-  microphone-permission quirks. Hosted WebRTC sessions (OpenAI Realtime, Gemini Live) may be easier
-  from the webview. Decide in a spike.
-- The macOS app needs `NSMicrophoneUsageDescription` in `Info.plist`.
-- Every voice path must produce the same finalized `turn` events, so the knowledge pipeline does not
-  care which voice provider produced them.
+- A dedicated Rust `cpal` worker owns the microphone stream. The user explicitly starts capture;
+  construction of the service and tests do not open the microphone. Recording stops after two
+  minutes, device failure, cancellation or app shutdown. Samples remain in bounded memory.
+- Input is downmixed and resampled with an anti-alias filter to mono 16 kHz PCM16 WAV. Silent
+  or very short recordings fail before upload. The macOS bundle includes the microphone purpose
+  description; signing configuration supplies the audio-input entitlement for signed builds.
+  Physical microphone permission/capture is not yet verified.
+- The optional `stt` role uses a separate OpenAI-compatible speech endpoint. The core pins its
+  URL, model and credentials before recording starts. Audio is sent when recording finishes;
+  cancel drops the in-flight transcription future. There is no provider fallback or audio storage.
+- Recognized text is appended to an editable draft. The learner presses Send to create the normal
+  text turn and start the same tutor/curator pipeline. Session changes and stale async results
+  cannot insert a transcript into another conversation. Failed cancellation keeps a visible lock.
+- This is turn-based voice input. TTS playback, interruption, voice commands and hosted WebRTC
+  sessions remain future work; Phase 3's original spoken-conversation exit criterion is not met.
 
 ---
 
@@ -514,6 +524,18 @@ source found or a correction offer, `[P2]` text, `[P3]` voice).
 - Deferred: embeddings/vector retrieval, classifier role, model-specific token budgeting,
   configurable vault locations and two-way Markdown editing.
 
+### 8.4 Review editing and speech input (2026-11-09)
+
+- Pending proposals have an optimistic revision number and immutable content snapshots, including
+  the original model proposal. Editing is validated transactionally; approval and rejection require
+  the reviewed revision. Evidence/session metadata stays fixed. The UI edits text fields and
+  selected visual labels, removes individual changes, and shows version history.
+- Approved article editing and full visual structure editing remain separate work. Saving a proposal
+  edit does not approve it; approval, vault synchronization, public export and undo use its edited content.
+- Synthetic English and Cantonese audio passed through the actual PC ASR and LLM services into
+  proposals, approval, retrieval, export, restart and undo. Audio capture processing is tested with
+  synthetic samples; hardware capture and native visual QA remain unverified.
+
 ---
 
 ## 9. Defaults and open decisions
@@ -532,7 +554,7 @@ source found or a correction offer, `[P2]` text, `[P3]` voice).
 **Open:**
 
 1. Final product name and bundle id (before the first release; §2.7).
-2. Voice capture location: Rust (`cpal`) vs webview.
+2. Hosted/realtime voice transport and TTS provider selection; native capture now uses Rust `cpal`.
 3. Minimum macOS version and Apple Silicon only vs universal binary.
 4. Open-source license.
 5. Product decisions still open in initial spec Part I §22.

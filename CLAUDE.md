@@ -11,12 +11,13 @@ approve, reject, edit or undo every change.
 
 ## Status
 
-**Phase 1 real-model loop verified; Phase 2 lexical retrieval + portability implemented**
+**Text learning, proposal editing, Phase 2 lexical retrieval + portability, and native voice input implemented**
 (`docs/architecture.md` §8.2–8.3). An
 OpenAI-compatible endpoint (Ollama, LM Studio, vLLM, OpenAI, OpenRouter, ...) can serve the
 `tutor` and `curator` roles; set them up under **Models** (`docs/guides/providers.md`). Until then
-the built-in Demo provider answers "What is a VAE?" offline. Phase 2 embeddings and the Phase 3
-voice spike remain. See `docs/guides/readiness.md` for the explicit feature audit.
+the built-in Demo provider answers "What is a VAE?" offline. An optional `stt` model transcribes
+native recordings into a reviewed draft. Embeddings, TTS and hosted/realtime voice remain.
+See `docs/guides/readiness.md` for the explicit feature audit and physical-device test gaps.
 
 ## Read these first
 
@@ -36,7 +37,7 @@ voice spike remain. See `docs/guides/readiness.md` for the explicit feature audi
 - **Bring your own model; bundle no models.** All AI (LLM, embeddings, STT, TTS, voice, document
   parsing) is reached over HTTP through traits in `crates/sunset-providers`. Do not add model
   weights, ONNX runtimes, or in-process inference.
-- **Roles, not one model:** `tutor`, `curator`, `classifier`, `embedder` (later `stt`, `tts`,
+- **Roles, not one model:** `tutor`, `curator`, optional `stt` (later `classifier`, `embedder`, `tts`,
   `voice`) are configured separately.
 - **Probe capabilities; never assume them.** "OpenAI-compatible" does not imply tool calling or JSON
   schema support. Validate all structured model output with `serde`.
@@ -58,6 +59,11 @@ voice spike remain. See `docs/guides/readiness.md` for the explicit feature audi
 - The vault is derived output, with private notes under `.private_overlay/`. Use the public
   export command to share; never copy the complete vault as a public export. Preserve edited
   and unmanaged mirror files and surface conflicts. Export snapshots always use a new folder.
+- Pending proposal edits append immutable snapshots. Approve/reject must carry the revision
+  the user reviewed; stale actions fail. Session and evidence turn IDs cannot be edited.
+- Microphone capture starts only on the user's Record action, on a dedicated CPAL worker.
+  Keep audio bounded and in memory, pin the speech destination before capture, and discard
+  recording/transcription on cancel. Recognized text goes to a draft, never automatically to chat.
 
 ## Conventions
 

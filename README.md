@@ -8,7 +8,9 @@ private notes about how you learn. You stay in control: approve, reject, edit, o
 
 Think of it as a personal Wikipedia that grows from your conversations.
 
-> **Status:** Real text loop verified; Phase 2 lexical retrieval and Markdown portability implemented.
+> **Status:** Text learning, editable proposals, lexical retrieval and Markdown portability implemented.
+> Native voice input now transcribes into a draft for review. Spoken tutor output and realtime
+> voice remain unfinished; microphone permission/capture still needs a physical-device check.
 > Connect an OpenAI-compatible model (Ollama, LM Studio, vLLM, OpenAI,
 > OpenRouter, ...) under **Models**; see [`docs/guides/providers.md`](docs/guides/providers.md).
 > Without one, a built-in demo model answers "What is a VAE?" offline.
@@ -34,7 +36,8 @@ Think of it as a personal Wikipedia that grows from your conversations.
   React + TypeScript interface.
 - **Local-first:** no server needed. A server and web client may come later, reusing the same
   Rust core.
-- **Text first, voice next.** The full learning loop is built with typed input before voice is added.
+- **One learning loop:** type a question or record it, review the transcript, then send it.
+  Speech recognition is optional and uses a separately selected model.
 
 ```text
 app-identity.json     product name + bundle id (temporary), the only place they are written
