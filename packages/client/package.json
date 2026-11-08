@@ -1,0 +1,15 @@
+{
+  "name": "@sunset/client",
+  "private": true,
+  "type": "module",
+  "description": "SunsetClient: the only way the UI talks to a backend.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@sunset/bindings": "workspace:*"
+  }
+}
