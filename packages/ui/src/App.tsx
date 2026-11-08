@@ -5,6 +5,7 @@ import { ClientProvider, useClient } from "./client-context";
 import { Conversation } from "./features/conversation/Conversation";
 import { useConversation } from "./features/conversation/useConversation";
 import { Graph } from "./features/graph/Graph";
+import { ModelsButton, ModelsPanel } from "./features/models/ModelsPanel";
 import { ProposalDrawer, ProposalBadge } from "./features/proposals/ProposalDrawer";
 import { SaveModeToggle } from "./features/proposals/SaveModeToggle";
 import { Wiki } from "./features/wiki/Wiki";
@@ -31,7 +32,9 @@ type Tab = "wiki" | "graph";
 
 function Shell({ productName }: { productName: string }) {
   const conversation = useConversation();
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  // One side panel at a time.
+  const [panel, setPanel] = useState<"proposals" | "models" | null>(null);
+  const toggle = (p: "proposals" | "models") => setPanel((cur) => (cur === p ? null : p));
   const [tab, setTab] = useState<Tab>("wiki");
   const [conceptId, setConceptId] = useState<ConceptId | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -39,6 +42,7 @@ function Shell({ productName }: { productName: string }) {
   useCoreEvents((event) => {
     conversation.onEvent(event);
     if (event.type === "job_failed") setNotice(`Background capture failed: ${event.message}`);
+    if (event.type === "tutor_failed") setNotice(`The tutor model failed: ${event.message}. Check Models.`);
   });
 
   const openConcept = (id: ConceptId) => {
@@ -52,7 +56,8 @@ function Shell({ productName }: { productName: string }) {
         <h1 className="text-lg font-semibold">{productName}</h1>
         <div className="flex items-center gap-3">
           <SaveModeToggle />
-          <ProposalBadge onClick={() => setDrawerOpen((o) => !o)} />
+          <ModelsButton onClick={() => toggle("models")} />
+          <ProposalBadge onClick={() => toggle("proposals")} />
         </div>
       </header>
       {notice && (
@@ -89,9 +94,8 @@ function Shell({ productName }: { productName: string }) {
             )}
           </div>
         </section>
-        {drawerOpen && (
-          <ProposalDrawer onClose={() => setDrawerOpen(false)} onOpenConcept={openConcept} />
-        )}
+        {panel === "proposals" && <ProposalDrawer onClose={() => setPanel(null)} onOpenConcept={openConcept} />}
+        {panel === "models" && <ModelsPanel onClose={() => setPanel(null)} />}
       </div>
     </div>
   );

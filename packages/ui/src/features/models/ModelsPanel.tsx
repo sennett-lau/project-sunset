@@ -1,0 +1,373 @@
+import type {
+  CapabilityStatus,
+  ModelCapabilities,
+  ProbeReport,
+  ProviderId,
+  ProviderProfile,
+  Role,
+  RoleAssignment,
+} from "@sunset/client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type ButtonHTMLAttributes, type FormEvent, type ReactNode, useEffect, useState } from "react";
+import { useClient } from "../../client-context";
+import { keys } from "../../query-keys";
+
+const ROLE_TEXT: Record<Role, { title: string; hint: string }> = {
+  tutor: { title: "Tutor", hint: "Answers you. Use the strongest model you can." },
+  curator: {
+    title: "Curator",
+    hint: "Proposes wiki updates in the background. Needs reliable JSON output.",
+  },
+};
+
+const PRESETS = [
+  { name: "Ollama", baseUrl: "http://localhost:11434/v1" },
+  { name: "LM Studio", baseUrl: "http://localhost:1234/v1" },
+  { name: "OpenAI", baseUrl: "https://api.openai.com/v1" },
+  { name: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1" },
+];
+
+/** Header button: shows what the tutor runs on and whether everything stays local. */
+export function ModelsButton({ onClick }: { onClick: () => void }) {
+  const client = useClient();
+  const { data } = useQuery({ queryKey: keys.models, queryFn: () => client.modelSettings() });
+  const tutor = data?.roles.find((r) => r.role === "tutor");
+  const provider = data?.providers.find((p) => p.id === tutor?.providerId);
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-2 rounded-full border border-stone-300 bg-white px-3 py-1 text-sm"
+    >
+      <span>Models</span>
+      {tutor && provider && (
+        <span className="max-w-40 truncate text-stone-500">
+          {provider.kind === "demo" ? "Demo" : tutor.model}
+        </span>
+      )}
+      {data && <LocalBadge local={data.allLocal} label={data.allLocal ? "local" : "cloud"} />}
+    </button>
+  );
+}
+
+export function ModelsPanel({ onClose }: { onClose: () => void }) {
+  const client = useClient();
+  const { data, error } = useQuery({ queryKey: keys.models, queryFn: () => client.modelSettings() });
+  const [editing, setEditing] = useState<ProviderProfile | "new" | null>(null);
+
+  return (
+    <aside className="flex w-[28rem] shrink-0 flex-col border-l border-stone-200 bg-stone-50" aria-label="Models">
+      <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
+        <h2 className="font-semibold">Models</h2>
+        <button onClick={onClose} className="text-stone-500" aria-label="Close">
+          ✕
+        </button>
+      </div>
+      <div className="min-h-0 flex-1 space-y-6 overflow-auto p-4 text-sm">
+        {error && <p className="text-red-700">{String(error)}</p>}
+        {data && (
+          <>
+            <p className={data.allLocal ? "text-green-800" : "text-amber-800"}>
+              {data.allLocal
+                ? "Every role runs on this Mac or your own network."
+                : "At least one role sends your conversation to a cloud service."}
+            </p>
+            <section className="space-y-3">
+              <h3 className="text-xs font-semibold uppercase text-stone-500">Roles</h3>
+              {data.roles.map((r) => (
+                <RoleEditor key={r.role} assignment={r} providers={data.providers} />
+              ))}
+            </section>
+            <section className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase text-stone-500">Providers</h3>
+                <button className="text-orange-700 underline" onClick={() => setEditing("new")}>
+                  Add provider
+                </button>
+              </div>
+              {editing === "new" && <ProviderForm onDone={() => setEditing(null)} />}
+              {data.providers.map((p) =>
+                editing !== "new" && editing?.id === p.id ? (
+                  <ProviderForm key={p.id} provider={p} onDone={() => setEditing(null)} />
+                ) : (
+                  <ProviderRow key={p.id} provider={p} onEdit={() => setEditing(p)} />
+                ),
+              )}
+            </section>
+          </>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+function RoleEditor({ assignment, providers }: { assignment: RoleAssignment; providers: ProviderProfile[] }) {
+  const client = useClient();
+  const queryClient = useQueryClient();
+  const [providerId, setProviderId] = useState<ProviderId>(assignment.providerId);
+  const [model, setModel] = useState(assignment.model);
+  const [report, setReport] = useState<ProbeReport | null>(null);
+  const provider = providers.find((p) => p.id === providerId);
+  const changed = providerId !== assignment.providerId || model !== assignment.model;
+
+  useEffect(() => {
+    setProviderId(assignment.providerId);
+    setModel(assignment.model);
+  }, [assignment.providerId, assignment.model]);
+
+  const models = useQuery({
+    queryKey: keys.providerModels(providerId),
+    queryFn: () => client.listModels(providerId),
+    retry: false,
+    staleTime: 60_000,
+  });
+  const save = useMutation({
+    mutationFn: () => client.setRole(assignment.role, providerId, model),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.models }),
+  });
+  const test = useMutation({
+    mutationFn: () => client.testConnection(providerId, model),
+    onSuccess: (r) => {
+      setReport(r);
+      void queryClient.invalidateQueries({ queryKey: keys.models });
+    },
+  });
+  const listId = `models-${assignment.role}`;
+
+  return (
+    <div className="space-y-2 rounded-lg border border-stone-200 bg-white p-3">
+      <div>
+        <p className="font-medium">{ROLE_TEXT[assignment.role].title}</p>
+        <p className="text-xs text-stone-500">{ROLE_TEXT[assignment.role].hint}</p>
+      </div>
+      <div className="flex gap-2">
+        <select
+          aria-label={`${ROLE_TEXT[assignment.role].title} provider`}
+          value={providerId}
+          onChange={(e) => {
+            const next = providers.find((p) => p.id === e.target.value);
+            setProviderId(e.target.value);
+            setModel(next?.kind === "demo" ? "scripted" : "");
+            setReport(null);
+          }}
+          className="w-40 rounded border border-stone-300 px-1.5 py-1"
+        >
+          {providers.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+        <input
+          aria-label={`${ROLE_TEXT[assignment.role].title} model`}
+          list={listId}
+          value={model}
+          onChange={(e) => {
+            setModel(e.target.value);
+            setReport(null);
+          }}
+          placeholder="model id, e.g. qwen3:8b"
+          className="min-w-0 flex-1 rounded border border-stone-300 px-2 py-1"
+        />
+        <datalist id={listId}>
+          {models.data?.map((m) => <option key={m} value={m} />)}
+        </datalist>
+      </div>
+      {models.isError && provider?.kind !== "demo" && (
+        <p className="text-xs text-stone-500">Could not list models ({String(models.error)}). Type the model id.</p>
+      )}
+      {!changed && <Capabilities caps={assignment.capabilities} />}
+      {report && <ProbeNotes report={report} />}
+      {(save.error || test.error) && <p className="text-red-700">{String(save.error ?? test.error)}</p>}
+      <div className="flex gap-2">
+        <Button disabled={!model.trim() || test.isPending} onClick={() => test.mutate()}>
+          {test.isPending ? "Testing…" : "Test connection"}
+        </Button>
+        <Button primary disabled={!changed || !model.trim() || save.isPending} onClick={() => save.mutate()}>
+          Use this model
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function Capabilities({ caps }: { caps: ModelCapabilities }) {
+  return (
+    <div className="flex flex-wrap gap-1.5 text-xs">
+      <Chip label="Streaming" status={caps.streaming} />
+      <Chip label="JSON schema" status={caps.jsonSchema} />
+      <Chip label="Tool calls" status={caps.toolCalls} />
+      {!caps.probedAt && <span className="text-stone-500">Not tested yet; safest settings in use.</span>}
+    </div>
+  );
+}
+
+function Chip({ label, status }: { label: string; status: CapabilityStatus }) {
+  const style = {
+    supported: "bg-green-100 text-green-800",
+    unsupported: "bg-stone-200 text-stone-600",
+    needs_test: "bg-amber-50 text-amber-800",
+  }[status];
+  const mark = { supported: "✓", unsupported: "✕", needs_test: "?" }[status];
+  return (
+    <span className={`rounded px-1.5 py-0.5 ${style}`}>
+      {mark} {label}
+    </span>
+  );
+}
+
+function ProbeNotes({ report }: { report: ProbeReport }) {
+  return (
+    <div className={`rounded p-2 text-xs ${report.reachable ? "bg-green-50" : "bg-red-50 text-red-800"}`}>
+      {report.reachable && <Capabilities caps={report.capabilities} />}
+      <ul className="mt-1 space-y-0.5">
+        {report.notes.map((n, i) => (
+          <li key={i}>{n}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ProviderRow({ provider: p, onEdit }: { provider: ProviderProfile; onEdit: () => void }) {
+  const client = useClient();
+  const queryClient = useQueryClient();
+  const remove = useMutation({
+    mutationFn: () => client.deleteProvider(p.id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.models }),
+  });
+  return (
+    <div className="rounded-lg border border-stone-200 bg-white p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-medium">{p.name}</p>
+        <LocalBadge local={p.isLocal} label={p.isLocal ? "local" : "cloud"} />
+      </div>
+      {p.kind !== "demo" && (
+        <>
+          <p className="truncate text-xs text-stone-500">{p.baseUrl}</p>
+          <p className="text-xs text-stone-500">{p.hasApiKey ? "API key saved in Keychain" : "No API key"}</p>
+          {remove.error && <p className="text-red-700">{String(remove.error)}</p>}
+          <div className="mt-2 flex gap-2">
+            <Button onClick={onEdit}>Edit</Button>
+            <Button disabled={remove.isPending} onClick={() => remove.mutate()}>
+              Remove
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ProviderForm({ provider, onDone }: { provider?: ProviderProfile; onDone: () => void }) {
+  const client = useClient();
+  const queryClient = useQueryClient();
+  const [name, setName] = useState(provider?.name ?? "");
+  const [baseUrl, setBaseUrl] = useState(provider?.baseUrl ?? "");
+  const [apiKey, setApiKey] = useState("");
+  const [removeKey, setRemoveKey] = useState(false);
+  const save = useMutation({
+    mutationFn: () =>
+      client.saveProvider(provider?.id ?? null, {
+        name,
+        baseUrl,
+        // Empty field on edit keeps the stored key; the key is never read back.
+        apiKey: removeKey ? "" : apiKey.trim() ? apiKey.trim() : null,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.models });
+      void queryClient.invalidateQueries({ queryKey: ["providerModels"] });
+      onDone();
+    },
+  });
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    save.mutate();
+  }
+  return (
+    <form onSubmit={submit} className="space-y-2 rounded-lg border border-orange-200 bg-white p-3">
+      {!provider && (
+        <div className="flex flex-wrap gap-1.5">
+          {PRESETS.map((p) => (
+            <button
+              type="button"
+              key={p.name}
+              className="rounded border border-stone-300 px-2 py-0.5 text-xs"
+              onClick={() => {
+                setName(p.name);
+                setBaseUrl(p.baseUrl);
+              }}
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
+      <Field label="Name">
+        <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded border border-stone-300 px-2 py-1" />
+      </Field>
+      <Field label="Base URL (OpenAI-compatible, usually ends in /v1)">
+        <input
+          value={baseUrl}
+          onChange={(e) => setBaseUrl(e.target.value)}
+          placeholder="http://localhost:11434/v1"
+          className="w-full rounded border border-stone-300 px-2 py-1"
+        />
+      </Field>
+      <Field label={provider?.hasApiKey ? "API key (leave empty to keep the saved one)" : "API key (optional for local servers)"}>
+        <input
+          type="password"
+          autoComplete="off"
+          value={apiKey}
+          disabled={removeKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          className="w-full rounded border border-stone-300 px-2 py-1"
+        />
+      </Field>
+      {provider?.hasApiKey && (
+        <label className="flex items-center gap-1.5 text-xs">
+          <input type="checkbox" checked={removeKey} onChange={(e) => setRemoveKey(e.target.checked)} />
+          Remove the saved key
+        </label>
+      )}
+      <p className="text-xs text-stone-500">Keys are stored in the macOS Keychain and never shown again.</p>
+      {save.error && <p className="text-red-700">{String(save.error)}</p>}
+      <div className="flex gap-2">
+        <Button primary type="submit" disabled={!name.trim() || !baseUrl.trim() || save.isPending}>
+          Save
+        </Button>
+        <Button type="button" onClick={onDone}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block space-y-0.5">
+      <span className="text-xs text-stone-600">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function LocalBadge({ local, label }: { local: boolean; label: string }) {
+  return (
+    <span className={`rounded px-1.5 py-0.5 text-xs ${local ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>
+      {label}
+    </span>
+  );
+}
+
+function Button({ primary, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { primary?: boolean }) {
+  return (
+    <button
+      type="button"
+      {...props}
+      className={`rounded-md px-3 py-1 font-medium disabled:opacity-40 ${
+        primary ? "bg-orange-500 text-white" : "border border-stone-300 bg-white"
+      }`}
+    />
+  );
+}

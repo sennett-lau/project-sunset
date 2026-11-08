@@ -3,8 +3,11 @@ import type {
   AppEvent,
   Concept,
   ConceptPage,
+  ModelCapabilities,
   Proposal,
   ProposalId,
+  ProviderProfile,
+  RoleAssignment,
   SaveMode,
   SunsetClient,
 } from "@sunset/client";
@@ -19,6 +22,17 @@ export function createFakeClient(): SunsetClient {
   const proposals: Proposal[] = [];
   let concepts: Concept[] = [];
   let mode: SaveMode = "approval";
+  const untested: ModelCapabilities = { streaming: "needs_test", jsonSchema: "needs_test", toolCalls: "needs_test", probedAt: null };
+  const demo: ProviderProfile = { id: id(), name: "Demo (offline, scripted)", kind: "demo", baseUrl: "", hasApiKey: false, isLocal: true, createdAt: now() };
+  const providers: ProviderProfile[] = [demo];
+  const roles: RoleAssignment[] = (["tutor", "curator"] as const).map((role) => ({
+    role,
+    providerId: demo.id,
+    model: "scripted",
+    capabilities: untested,
+  }));
+  /** Keys the UI sent; exposed so tests can check they are never read back. */
+  const keychain = new Map<string, string>();
 
   const find = (pid: ProposalId) => {
     const p = proposals.find((x) => x.id === pid);
@@ -128,6 +142,44 @@ export function createFakeClient(): SunsetClient {
     },
     async setSaveMode(m) {
       mode = m;
+    },
+    async modelSettings() {
+      return {
+        providers: providers.map((p) => ({ ...p })),
+        roles: roles.map((r) => ({ ...r })),
+        allLocal: roles.every((r) => providers.find((p) => p.id === r.providerId)?.isLocal),
+      };
+    },
+    async saveProvider(pid, input) {
+      let p = providers.find((x) => x.id === pid);
+      if (!p) {
+        p = { id: id(), name: "", kind: "openai_compatible", baseUrl: "", hasApiKey: false, isLocal: false, createdAt: now() };
+        providers.push(p);
+      }
+      p.name = input.name;
+      p.baseUrl = input.baseUrl;
+      p.isLocal = /localhost|127\.0\.0\.1/.test(input.baseUrl);
+      if (input.apiKey !== null) {
+        if (input.apiKey) keychain.set(p.id, input.apiKey);
+        else keychain.delete(p.id);
+        p.hasApiKey = Boolean(input.apiKey);
+      }
+      return { ...p };
+    },
+    async deleteProvider(pid) {
+      if (roles.some((r) => r.providerId === pid)) throw new Error("still used by a role");
+      providers.splice(providers.findIndex((p) => p.id === pid), 1);
+    },
+    async listModels(pid) {
+      return pid === demo.id ? ["scripted"] : ["qwen3:8b", "llama3.2"];
+    },
+    async testConnection(pid, model) {
+      const capabilities: ModelCapabilities = { streaming: "supported", jsonSchema: "supported", toolCalls: "unsupported", probedAt: now() };
+      return { providerId: pid, model, reachable: true, capabilities, notes: ["Basic request: OK"] };
+    },
+    async setRole(role, providerId, model) {
+      const r = roles.find((x) => x.role === role)!;
+      Object.assign(r, { providerId, model, capabilities: untested });
     },
     onEvent(listener) {
       listeners.add(listener);

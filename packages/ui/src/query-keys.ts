@@ -7,4 +7,6 @@ export const keys = {
   concept: (id: ConceptId) => ["concept", id] as const,
   graph: ["graph"] as const,
   saveMode: ["saveMode"] as const,
+  models: ["models"] as const,
+  providerModels: (id: string) => ["providerModels", id] as const,
 };
