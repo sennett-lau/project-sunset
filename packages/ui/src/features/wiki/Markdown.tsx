@@ -36,7 +36,13 @@ export function Markdown({
 
 function Link({ href, onLink, children }: { href?: string; onLink?: (slug: string) => void; children: ReactNode }) {
   if (href?.startsWith(WIKI)) {
-    const slug = decodeURIComponent(href.slice(WIKI.length));
+    if (!onLink) return <span>{children}</span>;
+    let slug: string;
+    try {
+      slug = decodeURIComponent(href.slice(WIKI.length));
+    } catch {
+      return <span>{children}</span>;
+    }
     return (
       <button
         type="button"

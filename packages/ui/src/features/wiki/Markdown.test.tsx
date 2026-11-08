@@ -21,3 +21,15 @@ test("wiki links, no raw HTML, no navigating links", () => {
   expect(container.querySelector("a")).toBeNull();
   expect(screen.getByRole("heading", { name: "Intro" })).toBeTruthy();
 });
+
+test("malformed model-written wiki URLs do not crash the reading surface", () => {
+  render(<Markdown source="Read [a concept](wiki:%E0%A4) and [[valid-concept]]." onLink={() => {}} />);
+  expect(screen.getByText("a concept")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "valid concept" })).toBeTruthy();
+});
+
+test("wiki references without a navigation handler are text, not inert buttons", () => {
+  render(<Markdown source="See [[a-concept]]." />);
+  expect(screen.queryByRole("button")).toBeNull();
+  expect(screen.getByText("a concept")).toBeTruthy();
+});

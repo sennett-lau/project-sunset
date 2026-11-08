@@ -1,3 +1,4 @@
+import { useId } from "react";
 import type { FlowEdge, FlowNode } from "@sunset/client";
 
 const BOX_W = 112;
@@ -9,15 +10,16 @@ const GAP = 28;
  * Input → Encoder → Latent → Decoder → Reconstruction. Plain SVG text: labels cannot inject markup.
  */
 export function ConceptFlow({ nodes, edges }: { nodes: FlowNode[]; edges: FlowEdge[] }) {
+  const arrowId = useId();
   const order = topoOrder(nodes, edges);
   const x = new Map(order.map((n, i) => [n.id, i * (BOX_W + GAP)]));
-  const width = order.length * (BOX_W + GAP) - GAP;
+  const width = Math.max(BOX_W, order.length * (BOX_W + GAP) - GAP);
   const y = 8;
 
   return (
-    <svg viewBox={`0 0 ${width} ${BOX_H + 16}`} className="w-full" role="img">
+    <svg viewBox={`0 0 ${width} ${BOX_H + 16}`} className="w-full" role="img" aria-label={`Concept flow: ${order.map((n) => n.label).join(" → ")}`}>
       <defs>
-        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <marker id={arrowId} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
           <path d="M0,0 L10,5 L0,10 z" fill="#a8a29e" />
         </marker>
       </defs>
@@ -29,7 +31,7 @@ export function ConceptFlow({ nodes, edges }: { nodes: FlowNode[]; edges: FlowEd
         const x1 = forward ? sx + BOX_W : sx;
         const x2 = forward ? tx - 2 : tx + BOX_W + 2;
         return (
-          <line key={i} x1={x1} y1={y + BOX_H / 2} x2={x2} y2={y + BOX_H / 2} stroke="#a8a29e" strokeWidth="1.5" markerEnd="url(#arrow)" />
+          <line key={i} x1={x1} y1={y + BOX_H / 2} x2={x2} y2={y + BOX_H / 2} stroke="#a8a29e" strokeWidth="1.5" markerEnd={`url(#${arrowId})`} />
         );
       })}
       {order.map((n) => (
