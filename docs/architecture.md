@@ -69,7 +69,8 @@ crates/sunset-domain/src/
 ├── concept.rs       # Concept, Alias
 ├── article.rs       # ArticleRevision, section structure
 ├── relation.rs      # Relation + closed set of relation types (IS_A, PART_OF, USES, ...)
-├── observation.rs   # LearningObservation (private overlay)
+├── observation.rs   # LearningObservation (private overlay): questions, confusions, familiarity
+├── visual.rs        # VisualArtifact + typed VisualPayload (§3.1); never model-written HTML/JS
 ├── source.rs        # Source, SourceSpan [P4]
 ├── proposal.rs      # Proposal, Patch, Evidence, lifecycle state
 ├── commit.rs        # Commit (append-only, undo_of)
@@ -279,9 +280,34 @@ type names are internal code names. They do not have to change with the product 
 - **Semantic search:** store embeddings with their model name and dimension. Start with brute-force
   cosine in Rust (a personal library is thousands of chunks, not millions). Move to `sqlite-vec` only
   when measurement says so.
-- **Markdown vault mirror:** after each commit, write `vault/<slug>.md` with YAML frontmatter and
-  `[[WikiLinks]]`. Private learning observations go to `vault/.private_overlay/` and are excluded
-  from any export. The mirror is one-way (DB → files) in v1.
+- **Markdown vault mirror** `[P2]`: after each commit, write one file per concept,
+  `vault/<slug>.md`. YAML frontmatter holds aliases and typed relations in both directions
+  (outgoing and incoming); the body links every related concept with `[[WikiLinks]]`, so links
+  work both ways in Obsidian. Private learning observations go to
+  `vault/.private_overlay/<slug>.md` and are excluded from any export. The mirror is one-way
+  (DB → files) in v1.
+- **Personal learning overlay** (decided 2026-11-08): per concept, the learner's own questions and
+  confusions, each linked to the `TurnId` (later also `SourceSpan`) it came from, plus
+  self-reported familiarity. Generated self-check questions, quizzes and spaced revisits are
+  **not** in v1 (initial spec Part I §13: out of scope for the initial product commitment).
+
+### 3.1 Visual artifacts (decided 2026-11-08)
+
+Teaching visuals are typed data, never model-written HTML or JavaScript (initial spec Part II §9.2
+and the "uncontrolled generated visuals" risk). The model emits a `VisualPayload`; the core
+validates it with `serde` plus per-kind checks; the UI renders it with trusted components.
+
+| `kind` | Payload | Rendered by |
+|---|---|---|
+| `concept_flow` | nodes + edges (the VAE example in §9.2) | built-in SVG component `[P0]` |
+| `mermaid` | diagram source | Mermaid with `securityLevel: "strict"` `[P1–2]` |
+| `plot` | plot type, axis labels, data series | chart component `[P1–2]` |
+| `parameter_explorer` | slider params + a preset naming a trusted component (e.g. 1-D Gaussian) | trusted React component, sliders only `[P1–2]` |
+| `equation_steps` | ordered LaTeX steps with explanations | KaTeX `[P1–2]` |
+
+Adding a renderer must not change the schema: payloads are stored as JSON with a
+`renderer_version`. Visuals attach to an article revision so they stay tied to the content and
+sources used to make them.
 - **Secrets:** provider API keys live in the macOS Keychain (`keyring` crate). Never in SQLite,
   config files or the webview.
 
@@ -382,6 +408,22 @@ model output.
   shell forwards them to the UI as Tauri events; `sunset-server` will forward them over WebSocket.
 - The fast path (tutor reply) never waits on the slow path (curation). Initial spec Part II §5.
 
+### 6.1 Delivering background results (decided 2026-11-08)
+
+Background results reach the user on two channels with different timing:
+
+- **Quiet channel, immediate:** state changes the user can glance at, such as the proposal
+  drawer badge, a source link or a "needs correction" marker. Emitted as events as soon as the
+  commit or proposal exists.
+- **Active channel, deferred:** anything that would speak or take focus ("I found a source for
+  that", a correction offer). Held in a delivery queue in `sunset-core` and released only in a
+  safe turn window: the user is not speaking or typing and the tutor is not mid-answer. Entries
+  carry `{session_id, topic_version, turn_id, job_id}` and are re-checked on release; stale ones
+  go to activity history instead (initial spec Part II §5.4).
+
+Phase 0 has only the quiet channel. The queue arrives with the first active notice (`[P1]` text,
+`[P3]` voice).
+
 ---
 
 ## 7. Voice (deferred, notes only)
@@ -399,7 +441,7 @@ model output.
 
 | Phase | Goal | Exit |
 |---|---|---|
-| **0. Skeleton** | Workspace, Tauri shell, `SunsetClient`, SQLite schema + migrations, generated bindings, mock provider. | App opens; typing "What is a VAE?" creates a deterministic mock proposal; approve/reject/undo changes the wiki. |
+| **0. Skeleton** | Workspace, Tauri shell, `SunsetClient`, SQLite schema + migrations (all canonical tables, including `visual_artifacts` and `learning_observations`), generated bindings, mock provider. | App opens; typing "What is a VAE?" streams a mock answer and creates one deterministic proposal (concept + article, relation, personal observation, `concept_flow` visual); approve/reject/undo changes the wiki. Covered by a Rust end-to-end test. |
 | **1. Real text loop** | OpenAI-compatible adapter, provider settings + Keychain, capability probe, streamed tutor answers, real curator proposals, wiki + focused graph. | Same loop with a real model (cloud *or* local Ollama), unchanged pipeline. |
 | **2. Retrieval + personal overlay** | FTS + embeddings, bounded context assembly, learning observations, Markdown vault mirror, export without private overlay. | Return days later; the tutor uses earlier concepts; export excludes private notes. |
 | **3. Voice spike** | One hosted voice path and one chained STT→LLM→TTS path behind the same turn contract. Cantonese benchmark set. | Spoken VAE conversation; reject a proposal by voice while talking. |
