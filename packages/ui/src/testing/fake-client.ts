@@ -215,6 +215,7 @@ export function createFakeClient(): SunsetClient {
       else roles.push({ role, providerId, model, capabilities: untested });
     },
     async startRecording() {},
+    async clearSpeechModel() { const index = roles.findIndex((r) => r.role === "stt"); if (index >= 0) roles.splice(index, 1); },
     async stopRecording() { return "What is a VAE?"; },
     async cancelRecording() {},
     async recordingStatus() { return { recording: false, elapsedMs: 0, autoStopped: false, error: null }; },

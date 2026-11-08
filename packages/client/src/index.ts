@@ -35,6 +35,8 @@ export interface SunsetClient {
   stopRecording(): Promise<string>;
   cancelRecording(): Promise<void>;
   recordingStatus(): Promise<CaptureStatus>;
+  /** Disable optional speech input and cancel any active recording/transcription. */
+  clearSpeechModel(): Promise<void>;
   /** Literal lexical search of approved public knowledge; not semantic search. */
   searchKnowledge(query: string, limit: number): Promise<ConceptSummary[]>;
   listSessions(limit: number): Promise<Session[]>;

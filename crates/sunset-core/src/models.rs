@@ -335,6 +335,15 @@ pub struct PreparedSpeech {
     recognizer: OpenAiSpeechRecognizer,
 }
 
+pub(crate) async fn clear_speech_model(app: &Sunset) -> Result<()> {
+    Ok(repo::clear_role(
+        &mut *app.inner.store.conn().await?,
+        app.inner.user,
+        Role::Stt,
+    )
+    .await?)
+}
+
 impl PreparedSpeech {
     /// Does not save audio, create a turn, or send text to the tutor. The user reviews it first.
     pub async fn transcribe(self, wav: Vec<u8>) -> Result<String> {

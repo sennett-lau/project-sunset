@@ -71,4 +71,8 @@ test("speech is an optional separate role and never receives a chat capability p
   await waitFor(async () => expect((await client.modelSettings()).roles.find((r) => r.role === "stt")?.model).toBe("qwen3-asr"));
   expect(client.testConnection).not.toHaveBeenCalled();
   await waitFor(() => expect((screen.getByRole("button", { name: "Record a question" }) as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(within(speech).getByRole("button", { name: "Disable speech" }));
+  await waitFor(() => expect((screen.getByRole("button", { name: "Record a question" }) as HTMLButtonElement).disabled).toBe(true));
+  expect((await client.modelSettings()).roles.map((r) => r.role)).toEqual(["tutor", "curator"]);
+  await expect(client.deleteProvider(provider.id)).resolves.toBeUndefined();
 });

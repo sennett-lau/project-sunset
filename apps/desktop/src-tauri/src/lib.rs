@@ -24,6 +24,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::stop_recording,
             commands::cancel_recording,
             commands::recording_status,
+            commands::clear_speech_model,
             commands::search_knowledge,
             commands::list_sessions,
             commands::export_public,

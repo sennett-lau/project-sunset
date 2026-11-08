@@ -205,3 +205,12 @@ pub async fn set_role(
     .await?;
     Ok(())
 }
+
+pub async fn clear_role(conn: &mut SqliteConnection, user: UserId, role: Role) -> Result<()> {
+    sqlx::query("DELETE FROM role_assignments WHERE user_id = ? AND role = ?")
+        .bind(user.to_string())
+        .bind(codec::tag(&role)?)
+        .execute(conn)
+        .await?;
+    Ok(())
+}

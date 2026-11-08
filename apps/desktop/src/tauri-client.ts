@@ -7,6 +7,7 @@ export const tauriClient: SunsetClient = {
   stopRecording: commands.stopRecording,
   cancelRecording: async () => { await commands.cancelRecording(); },
   recordingStatus: commands.recordingStatus,
+  clearSpeechModel: async () => { await commands.clearSpeechModel(); },
   searchKnowledge: commands.searchKnowledge,
   listSessions: commands.listSessions,
   exportPublicToFolder: commands.exportPublicToFolder,

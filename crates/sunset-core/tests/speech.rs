@@ -81,4 +81,8 @@ async fn speech_is_opt_in_pins_destination_and_creates_no_conversation() {
             .any(|r| r.role == Role::Stt && r.model == "asr-model")
     );
     assert!(app.prepare_speech().await.is_ok());
+    app.clear_speech_model().await.unwrap();
+    assert!(app.prepare_speech().await.is_err());
+    assert_eq!(app.model_settings().await.unwrap().roles.len(), 2);
+    app.delete_provider(provider.id).await.unwrap();
 }

@@ -264,6 +264,10 @@ impl Sunset {
         models::prepare_speech(self).await
     }
 
+    pub async fn clear_speech_model(&self) -> Result<()> {
+        models::clear_speech_model(self).await
+    }
+
     pub async fn model_settings(&self) -> Result<ModelSettings> {
         models::settings(self).await
     }

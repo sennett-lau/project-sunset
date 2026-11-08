@@ -45,6 +45,16 @@ pub async fn recording_status(
 
 #[tauri::command]
 #[specta::specta]
+pub async fn clear_speech_model(
+    sunset: State<'_, Sunset>,
+    voice: State<'_, crate::voice::VoiceState>,
+) -> CmdResult<()> {
+    voice.cancel().await?;
+    sunset.clear_speech_model().await.map_err(err)
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn send_message(
     sunset: State<'_, Sunset>,
     session_id: Option<SessionId>,

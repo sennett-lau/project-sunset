@@ -123,6 +123,11 @@ function SpeechRoleEditor({ assignment, providers }: { assignment?: RoleAssignme
     mutationFn: () => client.setRole("stt", providerId, model.trim()),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.models }),
   });
+  const disable = useMutation({
+    mutationFn: () => client.clearSpeechModel(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.models }),
+  });
+  const pending = save.isPending || disable.isPending;
 
   return (
     <section aria-label="Speech recognition" className="space-y-2 rounded-lg border border-orange-200 bg-orange-50/40 p-3">
@@ -130,22 +135,23 @@ function SpeechRoleEditor({ assignment, providers }: { assignment?: RoleAssignme
       <p className="text-xs text-stone-600">Record up to two minutes, then review and edit the transcript before sending. Choose a model that supports audio transcription.</p>
       {!available.length && <p className="text-sm text-stone-600">Add a speech provider below to enable the microphone.</p>}
       <div className="flex gap-2">
-        <select aria-label="Speech recognition provider" value={providerId} disabled={save.isPending || !available.length}
+        <select aria-label="Speech recognition provider" value={providerId} disabled={pending || !available.length}
           onChange={(e) => { setProviderId(e.target.value); setModel(""); }} className="w-40 rounded border border-stone-300 bg-white px-1.5 py-1">
           <option value="">Choose a provider…</option>
           {available.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <input aria-label="Speech recognition model" list="models-stt" value={model} disabled={save.isPending || !provider}
+        <input aria-label="Speech recognition model" list="models-stt" value={model} disabled={pending || !provider}
           onChange={(e) => setModel(e.target.value)} placeholder="e.g. qwen3-asr" className="min-w-0 flex-1 rounded border border-stone-300 bg-white px-2 py-1" />
         <datalist id="models-stt">{models.data?.map((m) => <option key={m} value={m} />)}</datalist>
       </div>
       {models.isError && <p className="text-xs text-stone-500">Could not list models. You can type the model id.</p>}
       {provider && <p className="text-xs text-stone-600">Recordings will be sent to {provider.name} ({provider.isLocal ? "your network" : "cloud"}) at {provider.baseUrl}. Recordings are held in memory and discarded after transcription or cancellation.</p>}
       {assignment && !changed && <p className="text-xs text-green-800">Selected. Try “Record a question” in the conversation to check recognition.</p>}
-      {save.error && <p role="alert" className="text-sm text-red-700">{String(save.error)}</p>}
-      <Button primary disabled={!provider || !model.trim() || !changed || save.isPending} onClick={() => save.mutate()}>
+      {(save.error || disable.error) && <p role="alert" className="text-sm text-red-700">{String(save.error ?? disable.error)}</p>}
+      <div className="flex gap-2"><Button primary disabled={!provider || !model.trim() || !changed || pending} onClick={() => save.mutate()}>
         {save.isPending ? "Saving…" : "Use for speech"}
       </Button>
+      {assignment && <Button disabled={pending} onClick={() => disable.mutate()}>{disable.isPending ? "Disabling…" : "Disable speech"}</Button>}</div>
     </section>
   );
 }

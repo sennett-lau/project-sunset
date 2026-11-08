@@ -11,6 +11,7 @@ export const commands = {
 	stopRecording: () => __TAURI_INVOKE<string>("stop_recording"),
 	cancelRecording: () => __TAURI_INVOKE<null>("cancel_recording"),
 	recordingStatus: () => __TAURI_INVOKE<CaptureStatus>("recording_status"),
+	clearSpeechModel: () => __TAURI_INVOKE<null>("clear_speech_model"),
 	searchKnowledge: (query: string, limit: number) => __TAURI_INVOKE<ConceptSummary[]>("search_knowledge", { query, limit }),
 	listSessions: (limit: number) => __TAURI_INVOKE<Session[]>("list_sessions", { limit }),
 	exportPublic: () => __TAURI_INVOKE<PublicExportFile[]>("export_public"),
