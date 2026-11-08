@@ -1,15 +1,17 @@
 import type { AppEvent, ConceptId, SunsetClient } from "@sunset/client";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { ClientProvider, useClient } from "./client-context";
 import { Conversation } from "./features/conversation/Conversation";
 import { useConversation } from "./features/conversation/useConversation";
-import { Graph } from "./features/graph/Graph";
 import { ModelsButton, ModelsPanel } from "./features/models/ModelsPanel";
 import { ProposalDrawer, ProposalBadge } from "./features/proposals/ProposalDrawer";
 import { SaveModeToggle } from "./features/proposals/SaveModeToggle";
 import { Wiki } from "./features/wiki/Wiki";
 import { keys } from "./query-keys";
+
+// Cytoscape is large; load it when the Graph tab first opens.
+const Graph = lazy(() => import("./features/graph/Graph").then((m) => ({ default: m.Graph })));
 
 export interface AppProps {
   client: SunsetClient;
@@ -90,7 +92,9 @@ function Shell({ productName }: { productName: string }) {
             {tab === "wiki" ? (
               <Wiki selected={conceptId} onSelect={openConcept} />
             ) : (
-              <Graph onSelect={openConcept} />
+              <Suspense fallback={null}>
+                <Graph focus={conceptId} onSelect={openConcept} />
+              </Suspense>
             )}
           </div>
         </section>

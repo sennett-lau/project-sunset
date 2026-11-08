@@ -1,56 +1,135 @@
-import type { ConceptId } from "@sunset/client";
+import type { ConceptId, GraphView } from "@sunset/client";
 import { useQuery } from "@tanstack/react-query";
+import cytoscape, { type Core, type ElementDefinition } from "cytoscape";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useClient } from "../../client-context";
 import { keys } from "../../query-keys";
 
-const SIZE = 480;
-const R = 170;
+/** How far from the focused concept the focused view reaches. */
+const HOPS = 2;
 
 /**
- * Phase 0 graph: concepts on a circle, typed edges between them. The focused, interactive
- * Cytoscape.js graph replaces this in Phase 1.
+ * Focused concept graph (initial spec Part I §7.3). Shows the selected concept and its
+ * neighbourhood, or everything. The layout only re-runs when the set of visible nodes changes,
+ * so the view stays still while you read.
  */
-export function Graph({ onSelect }: { onSelect: (id: ConceptId) => void }) {
+export function Graph({ focus, onSelect }: { focus: ConceptId | null; onSelect: (id: ConceptId) => void }) {
   const client = useClient();
   const { data } = useQuery({ queryKey: keys.graph, queryFn: () => client.graph() });
-  if (!data) return null;
-  if (data.nodes.length === 0) {
-    return <p className="p-6 text-stone-500">No concepts yet.</p>;
-  }
-  const c = SIZE / 2;
-  const pos = new Map(
-    data.nodes.map((n, i) => {
-      const a = (2 * Math.PI * i) / data.nodes.length - Math.PI / 2;
-      return [n.id, { x: c + R * Math.cos(a), y: c + R * Math.sin(a) }];
-    }),
-  );
+  const [showAll, setShowAll] = useState(false);
+  const container = useRef<HTMLDivElement>(null);
+  const cy = useRef<Core | null>(null);
+  const shownKey = useRef("");
+  const select = useRef(onSelect);
+  select.current = onSelect;
 
+  const elements = useMemo(() => (data ? visible(data, showAll ? null : focus) : []), [data, focus, showAll]);
+
+  useEffect(() => {
+    if (!container.current) return;
+    const instance = cytoscape({
+      container: container.current,
+      wheelSensitivity: 0.3,
+      style: [
+        {
+          selector: "node",
+          style: {
+            label: "data(label)",
+            "background-color": "#fb923c",
+            width: 18,
+            height: 18,
+            "font-size": 11,
+            color: "#292524",
+            "text-valign": "bottom",
+            "text-margin-y": 4,
+          },
+        },
+        { selector: "node.focus", style: { "background-color": "#c2410c", width: 26, height: 26, "font-weight": "bold" } },
+        {
+          selector: "edge",
+          style: {
+            label: "data(label)",
+            width: 1.5,
+            "line-color": "#d6d3d1",
+            "target-arrow-color": "#a8a29e",
+            "target-arrow-shape": "triangle",
+            "curve-style": "bezier",
+            "font-size": 9,
+            color: "#78716c",
+            "text-rotation": "autorotate",
+            "text-background-color": "#ffffff",
+            "text-background-opacity": 1,
+          },
+        },
+      ],
+    });
+    instance.on("tap", "node", (e) => select.current(e.target.id()));
+    cy.current = instance;
+    return () => {
+      instance.destroy();
+      cy.current = null;
+      shownKey.current = "";
+    };
+  }, []);
+
+  useEffect(() => {
+    const c = cy.current;
+    if (!c) return;
+    const key = elements
+      .map((e) => e.data.id)
+      .sort()
+      .join(",");
+    if (key !== shownKey.current) {
+      c.elements().remove();
+      c.add(elements);
+      c.layout({ name: "cose", animate: false, fit: true, padding: 40 }).run();
+      shownKey.current = key;
+    } else {
+      for (const e of elements) c.getElementById(e.data.id!).data("label", e.data.label);
+    }
+    c.nodes().removeClass("focus");
+    if (focus) c.getElementById(focus).addClass("focus");
+  }, [elements, focus]);
+
+  const empty = data && data.nodes.length === 0;
   return (
-    <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="mx-auto h-full max-h-[600px] w-full">
-      {data.edges.map((e) => {
-        const a = pos.get(e.from);
-        const b = pos.get(e.to);
-        if (!a || !b) return null;
-        return (
-          <g key={e.id}>
-            <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#d6d3d1" strokeWidth="1.5" />
-            <text x={(a.x + b.x) / 2} y={(a.y + b.y) / 2 - 4} textAnchor="middle" className="fill-stone-500 text-[10px]">
-              {e.label ?? e.kind.toLowerCase().replaceAll("_", " ")}
-            </text>
-          </g>
-        );
-      })}
-      {data.nodes.map((n) => {
-        const p = pos.get(n.id)!;
-        return (
-          <g key={n.id} onClick={() => onSelect(n.id)} className="cursor-pointer">
-            <circle cx={p.x} cy={p.y} r="8" className="fill-orange-400" />
-            <text x={p.x} y={p.y + 22} textAnchor="middle" className="fill-stone-800 text-xs">
-              {n.title}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
+    <div className="relative h-full">
+      {empty && <p className="absolute inset-x-0 top-0 p-6 text-stone-500">No concepts yet.</p>}
+      {!empty && (
+        <label className="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded bg-white/90 px-2 py-1 text-xs text-stone-600 shadow-sm">
+          <input type="checkbox" checked={showAll || !focus} disabled={!focus} onChange={(e) => setShowAll(e.target.checked)} />
+          Show all concepts
+        </label>
+      )}
+      <div ref={container} className="h-full w-full" />
+    </div>
   );
+}
+
+/** Nodes within `HOPS` of `focus` (all nodes when `focus` is null), and the edges between them. */
+function visible(graph: GraphView, focus: ConceptId | null): ElementDefinition[] {
+  let keep = new Set(graph.nodes.map((n) => n.id));
+  if (focus && keep.has(focus)) {
+    keep = new Set([focus]);
+    for (let i = 0; i < HOPS; i++) {
+      for (const e of graph.edges) {
+        if (keep.has(e.from)) keep.add(e.to);
+        if (keep.has(e.to)) keep.add(e.from);
+      }
+    }
+  }
+  const nodes: ElementDefinition[] = graph.nodes
+    .filter((n) => keep.has(n.id))
+    .map((n) => ({ data: { id: n.id, label: n.title } }));
+  const edges: ElementDefinition[] = graph.edges
+    .filter((e) => keep.has(e.from) && keep.has(e.to))
+    .map((e) => ({
+      data: {
+        id: e.id,
+        source: e.from,
+        target: e.to,
+        label: e.label ?? e.kind.toLowerCase().replaceAll("_", " "),
+      },
+    }));
+  return [...nodes, ...edges];
 }
