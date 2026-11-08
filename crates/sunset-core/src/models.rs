@@ -16,6 +16,7 @@ use sunset_providers::adapters::openai_compat::{
 };
 use sunset_providers::local::is_local_url;
 use sunset_providers::probe::probe_openai_compat;
+use sunset_providers::speech::{OpenAiSpeechConfig, OpenAiSpeechRecognizer, SpeechRecognizer};
 use sunset_providers::{Capability, ChatCapabilities, ChatModel};
 use sunset_store::repo::models::{self as repo, ProviderRecord};
 
@@ -44,7 +45,7 @@ pub(crate) async fn ensure_defaults(app: &Sunset) -> Result<()> {
             .id
         }
     };
-    for role in Role::ALL {
+    for role in [Role::Tutor, Role::Curator] {
         if repo::role(&mut conn, inner.user, role).await?.is_none() {
             repo::set_role(&mut conn, inner.user, role, demo, mock::DEMO_MODEL).await?;
         }
@@ -63,7 +64,8 @@ pub(crate) async fn model_for(app: &Sunset, role: Role) -> Result<Arc<dyn ChatMo
         .await?
         .ok_or(CoreError::NotFound("provider"))?;
     match provider.kind {
-        ProviderKind::Demo => Ok(mock::model(role, inner.demo_chunk_delay)),
+        ProviderKind::Demo => mock::model(role, inner.demo_chunk_delay)
+            .ok_or_else(|| CoreError::Invalid("the Demo provider has no speech model".into())),
         ProviderKind::OpenaiCompatible => {
             let caps = repo::capabilities(&mut conn, provider_id, &model).await?;
             drop(conn);
@@ -288,9 +290,56 @@ pub(crate) async fn set_role(app: &Sunset, role: Role, id: ProviderId, model: &s
     if model.is_empty() {
         return Err(CoreError::Invalid("model is empty".into()));
     }
-    load(app, id).await?;
+    let provider = load(app, id).await?;
+    if role == Role::Stt && provider.kind == ProviderKind::Demo {
+        return Err(CoreError::Invalid(
+            "speech recognition needs a real audio model".into(),
+        ));
+    }
     let mut conn = app.inner.store.conn().await?;
     Ok(repo::set_role(&mut conn, app.inner.user, role, id, model).await?)
+}
+
+/// Pins the destination and credentials before recording begins. Changing model settings later
+/// cannot redirect an already-started recording to another endpoint.
+pub(crate) async fn prepare_speech(app: &Sunset) -> Result<PreparedSpeech> {
+    let mut conn = app.inner.store.conn().await?;
+    let (provider_id, model) = repo::role(&mut conn, app.inner.user, Role::Stt)
+        .await?
+        .ok_or_else(|| {
+            CoreError::Invalid("choose a speech recognition model under Models first".into())
+        })?;
+    let provider = repo::provider(&mut conn, provider_id)
+        .await?
+        .ok_or(CoreError::NotFound("provider"))?;
+    drop(conn);
+    if provider.kind == ProviderKind::Demo {
+        return Err(CoreError::Invalid(
+            "the Demo provider has no speech model".into(),
+        ));
+    }
+    let api_key = api_key(app, &provider).await?;
+    Ok(PreparedSpeech {
+        recognizer: OpenAiSpeechRecognizer::new(
+            app.inner.http.clone(),
+            OpenAiSpeechConfig {
+                base_url: provider.base_url,
+                api_key,
+                model,
+            },
+        ),
+    })
+}
+
+pub struct PreparedSpeech {
+    recognizer: OpenAiSpeechRecognizer,
+}
+
+impl PreparedSpeech {
+    /// Does not save audio, create a turn, or send text to the tutor. The user reviews it first.
+    pub async fn transcribe(self, wav: Vec<u8>) -> Result<String> {
+        Ok(self.recognizer.transcribe(wav).await?)
+    }
 }
 
 async fn load(app: &Sunset, id: ProviderId) -> Result<ProviderRecord> {

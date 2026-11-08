@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { App } from "../../App";
 import { createFakeClient } from "../../testing/fake-client";
 
@@ -54,4 +54,20 @@ test("connection testing locks the selected provider and model until results arr
   finish();
   await within(panel).findByText("Basic request: OK");
   expect((within(panel).getByLabelText("Tutor model") as HTMLInputElement).disabled).toBe(false);
+});
+
+test("speech is an optional separate role and never receives a chat capability probe", async () => {
+  const client = createFakeClient();
+  const provider = await client.saveProvider(null, { name: "Speech server", baseUrl: "http://localhost:8180/v1", apiKey: null });
+  client.testConnection = vi.fn(client.testConnection);
+  render(<App client={client} productName="Test" />);
+  fireEvent.click(await screen.findByRole("button", { name: /Models/ }));
+  const speech = await screen.findByRole("region", { name: "Speech recognition" });
+  expect(within(speech).queryByRole("option", { name: /Demo/ })).toBeNull();
+  expect(within(speech).queryByRole("button", { name: "Test connection" })).toBeNull();
+  fireEvent.change(within(speech).getByLabelText("Speech recognition provider"), { target: { value: provider.id } });
+  fireEvent.change(within(speech).getByLabelText("Speech recognition model"), { target: { value: "qwen3-asr" } });
+  fireEvent.click(within(speech).getByRole("button", { name: "Use for speech" }));
+  await waitFor(async () => expect((await client.modelSettings()).roles.find((r) => r.role === "stt")?.model).toBe("qwen3-asr"));
+  expect(client.testConnection).not.toHaveBeenCalled();
 });

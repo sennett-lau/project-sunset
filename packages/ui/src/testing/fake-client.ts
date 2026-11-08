@@ -210,8 +210,9 @@ export function createFakeClient(): SunsetClient {
       return { providerId: pid, model, reachable: true, capabilities, notes: ["Basic request: OK"] };
     },
     async setRole(role, providerId, model) {
-      const r = roles.find((x) => x.role === role)!;
-      Object.assign(r, { providerId, model, capabilities: untested });
+      const r = roles.find((x) => x.role === role);
+      if (r) Object.assign(r, { providerId, model, capabilities: untested });
+      else roles.push({ role, providerId, model, capabilities: untested });
     },
     onEvent(listener) {
       listeners.add(listener);

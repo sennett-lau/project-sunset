@@ -20,12 +20,13 @@ use crate::knowledge::curator::{ANSWER_LABEL, CuratorOutput, ProposalDraft, QUES
 pub const DEMO_MODEL: &str = "scripted";
 
 /// The scripted model for `role`. `chunk_delay` paces the streamed answer; zero in tests.
-pub fn model(role: Role, chunk_delay: Duration) -> Arc<dyn ChatModel> {
+pub fn model(role: Role, chunk_delay: Duration) -> Option<Arc<dyn ChatModel>> {
     match role {
-        Role::Tutor => {
-            Arc::new(MockChatModel::new("demo/tutor", tutor).with_chunk_delay(chunk_delay))
-        }
-        Role::Curator => Arc::new(MockChatModel::new("demo/curator", curator)),
+        Role::Tutor => Some(Arc::new(
+            MockChatModel::new("demo/tutor", tutor).with_chunk_delay(chunk_delay),
+        )),
+        Role::Curator => Some(Arc::new(MockChatModel::new("demo/curator", curator))),
+        Role::Stt => None,
     }
 }
 

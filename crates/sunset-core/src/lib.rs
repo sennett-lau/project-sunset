@@ -14,6 +14,7 @@ mod models;
 
 pub use app::{Sunset, SunsetConfig};
 pub use error::{CoreError, Result};
+pub use models::PreparedSpeech;
 pub use sunset_domain as domain;
 pub use sunset_domain::AppIdentity;
 #[cfg(target_os = "macos")]

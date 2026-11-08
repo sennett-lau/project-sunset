@@ -45,9 +45,46 @@ async fn live_tutor_curator_approve_restart_undo() {
 
     let mut events = app.subscribe();
     let started = Instant::now();
-    let question = std::env::var("SUNSET_TEST_QUESTION").unwrap_or_else(|_| {
+    let question = if let Ok(path) = std::env::var("SUNSET_TEST_WAV") {
+        let speech = app
+            .save_provider(
+                None,
+                ProviderInput {
+                    name: "Explicit live speech test".into(),
+                    base_url: std::env::var("SUNSET_TEST_STT_URL")
+                        .expect("SUNSET_TEST_STT_URL required"),
+                    api_key: None,
+                },
+            )
+            .await
+            .unwrap();
+        app.set_role(
+            Role::Stt,
+            speech.id,
+            &std::env::var("SUNSET_TEST_STT_MODEL").expect("SUNSET_TEST_STT_MODEL required"),
+        )
+        .await
+        .unwrap();
+        let question = app
+            .prepare_speech()
+            .await
+            .unwrap()
+            .transcribe(std::fs::read(path).expect("read synthetic WAV fixture"))
+            .await
+            .unwrap();
+        if let Ok(expected) = std::env::var("SUNSET_TEST_TRANSCRIPT_CONTAINS") {
+            assert!(
+                question.to_lowercase().contains(&expected.to_lowercase()),
+                "recognized question did not contain the expected phrase: {question}"
+            );
+        }
+        println!("Recognized question: {question}");
+        question
+    } else {
+        std::env::var("SUNSET_TEST_QUESTION").unwrap_or_else(|_| {
         "What is a variational autoencoder (VAE)? Explain the encoder, latent space and decoder in fewer than 150 words. I prefer concrete examples.".into()
-    });
+    })
+    };
     let sent = app.send_message(None, &question).await.unwrap();
     let mut answer = String::new();
     let mut first_delta = None;

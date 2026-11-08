@@ -259,6 +259,11 @@ impl Sunset {
 
     // ---- models -----------------------------------------------------------------------------
 
+    /// Resolve the speech destination before capture, keeping it fixed until transcription ends.
+    pub async fn prepare_speech(&self) -> Result<crate::PreparedSpeech> {
+        models::prepare_speech(self).await
+    }
+
     pub async fn model_settings(&self) -> Result<ModelSettings> {
         models::settings(self).await
     }

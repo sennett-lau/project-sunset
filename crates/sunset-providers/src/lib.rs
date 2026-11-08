@@ -8,6 +8,7 @@ pub mod local;
 pub mod probe;
 mod reasoning;
 pub mod secrets;
+pub mod speech;
 mod sse;
 pub mod structured;
 mod traits;

@@ -336,11 +336,7 @@ export type RelationView = {
 export type RevisionId = string;
 
 /**  A job the app needs a model for. Each role is configured separately. */
-export type Role = 
-/**  Answers and teaches; streamed to the user. */
-"tutor" | 
-/**  Turns exchanges into structured proposals. */
-"curator";
+export type Role = "tutor" | "curator" | "stt";
 
 /**  Which provider and model a role uses. */
 export type RoleAssignment = {

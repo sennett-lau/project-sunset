@@ -45,14 +45,16 @@ pub struct ProviderInput {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
-    /// Answers and teaches; streamed to the user.
+    // Answers and teaches; streamed to the user.
     Tutor,
-    /// Turns exchanges into structured proposals.
+    // Turns exchanges into structured proposals.
     Curator,
+    // Optional speech recognition. Unassigned until the user selects an audio model.
+    Stt,
 }
 
 impl Role {
-    pub const ALL: [Role; 2] = [Role::Tutor, Role::Curator];
+    pub const ALL: [Role; 3] = [Role::Tutor, Role::Curator, Role::Stt];
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
