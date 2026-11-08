@@ -18,6 +18,13 @@ pub enum AppEvent {
         turn_id: TurnId,
         text: String,
     },
+    /// The tutor could not answer. Nothing was stored for `turn_id`.
+    TutorFailed {
+        session_id: SessionId,
+        turn_id: TurnId,
+        message: String,
+    },
+    /// A user or tutor turn was stored.
     TurnFinalized {
         turn: Turn,
     },
