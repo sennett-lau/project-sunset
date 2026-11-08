@@ -11,7 +11,9 @@ approve, reject, edit or undo every change.
 
 ## Status
 
-Pre-code. No application code exists yet. The next step is **Phase 0** in `docs/architecture.md`.
+**Phase 0 (skeleton) in progress.** The workspace, crate layout and a Tauri window exist. Still to
+do in Phase 0: SQLite schema, generated bindings, `SunsetClient`, mock provider and the mock
+proposal loop (`docs/architecture.md` §8).
 
 ## Read these first
 
@@ -56,10 +58,31 @@ Pre-code. No application code exists yet. The next step is **Phase 0** in `docs/
 - Product terms follow `docs/initial/initial.md` Appendix A (concept, article, proposal, revision,
   personal overlay, source anchor, ...). Table names follow Part II §7.2.
 - When a technical decision changes, update `docs/architecture.md` in the same change.
+- **The product name and bundle id are temporary.** They are written only in `app-identity.json`
+  ("Sunset", `dev.sennett.sunset`). Never hard-code either one anywhere else:
+  - Rust gets them through the injected `sunset_domain::AppIdentity` (keychain service, vault
+    folder name, etc. are derived from it).
+  - TypeScript imports them via `apps/desktop/src/identity.ts`.
+  - Files that must contain a literal copy (e.g. `tauri.conf.json`) are targets in
+    `scripts/identity.mjs`. Add new ones there, then run `pnpm identity:sync`.
+  - The `sunset-*` crate/package names and `Sunset*` type names are internal code names and are
+    fine to use. See `docs/architecture.md` §2.7.
 
 ## Commands
 
-None yet. Add build, dev, test and lint commands here when Phase 0 creates them.
+Run from the repo root.
+
+| Command | What it does |
+|---|---|
+| `pnpm install` | Install JS dependencies |
+| `pnpm dev` | Run the desktop app (Vite + Tauri, hot reload) |
+| `pnpm build` | Build the macOS `.app` / `.dmg` |
+| `pnpm check` | Everything CI runs: identity check, typecheck, `cargo fmt --check`, clippy, tests |
+| `pnpm typecheck` | TypeScript only |
+| `pnpm identity:sync` | Copy `app-identity.json` into files that need a literal copy |
+| `cargo test --workspace` | Rust tests only |
+
+Rust version is pinned in `rust-toolchain.toml`; rustup installs it automatically.
 
 ## GitHub
 

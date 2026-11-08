@@ -8,7 +8,10 @@ private notes about how you learn. You stay in control: approve, reject, edit, o
 
 Think of it as a personal Wikipedia that grows from your conversations.
 
-> **Status:** early design. No application code yet.
+> **Status:** Phase 0 skeleton. The app opens a window and does nothing else yet.
+>
+> "Sunset" is a working name. The product name and bundle id live in
+> [`app-identity.json`](app-identity.json) and will change before the first release.
 
 ## Goals
 
@@ -30,15 +33,19 @@ Think of it as a personal Wikipedia that grows from your conversations.
 - **Text first, voice next.** The full learning loop is built with typed input before voice is added.
 
 ```text
+app-identity.json     product name + bundle id (temporary), the only place they are written
 crates/
-  sunset-core/        domain logic: proposals, revisions, jobs, events
+  sunset-domain/      plain data types shared by all crates
+  sunset-core/        business logic: proposals, revisions, jobs, events
   sunset-store/       SQLite storage, search, Markdown vault mirror
   sunset-providers/   AI model adapters (OpenAI-compatible, Anthropic, ...)
   sunset-server/      later: HTTP/WebSocket server for a web client
 apps/
-  desktop/            Tauri app (Rust shell + React UI)
+  desktop/            Tauri app (Rust shell + React entry point)
 packages/
-  bindings/           TypeScript types generated from Rust
+  ui/                 shared React UI
+  client/             SunsetClient interface (coming in Phase 0)
+  bindings/           TypeScript types generated from Rust (coming in Phase 0)
 ```
 
 Details: [`docs/architecture.md`](docs/architecture.md).
@@ -51,11 +58,19 @@ Details: [`docs/architecture.md`](docs/architecture.md).
 
 ## Development
 
-Setup instructions will be added with the first code. Expected toolchain:
+Requirements:
 
-- Rust (stable) with Cargo
+- macOS with Xcode Command Line Tools (`xcode-select --install`)
+- [rustup](https://rustup.rs/). The Rust version is pinned in `rust-toolchain.toml` and installed
+  automatically.
 - Node.js 24+ and pnpm 10+
-- Xcode Command Line Tools (for Tauri on macOS)
+
+```sh
+pnpm install
+pnpm dev      # run the desktop app with hot reload
+pnpm check    # what CI runs: identity check, typecheck, fmt, clippy, tests
+pnpm build    # build the .app and .dmg
+```
 
 ## License
 
