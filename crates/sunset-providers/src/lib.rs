@@ -12,6 +12,8 @@ pub mod structured;
 mod traits;
 mod types;
 
+/// Shared HTTP client type; build one with [`adapters::openai_compat::http_client`].
+pub use reqwest::Client as HttpClient;
 pub use traits::{ChatModel, ChatStream, Embedder};
 pub use types::{
     Capability, ChatCapabilities, ChatDelta, ChatMessage, ChatRequest, ChatResponse, ChatRole,

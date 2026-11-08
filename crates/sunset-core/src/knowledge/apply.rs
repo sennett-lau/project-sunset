@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use sunset_domain::{
-    AppEvent, ConceptId, Proposal, ProposalId, ProposalStatus, ProposedChange, RevisionId,
+    AppEvent, ConceptId, Proposal, ProposalId, ProposalStatus, ProposedChange, RevisionId, slugify,
 };
 use sunset_store::Tx;
 use sunset_store::repo::{commits, knowledge as kn, proposals};
@@ -127,9 +127,24 @@ async fn apply_changes(
                 title,
                 aliases,
             } => {
-                // Phase 0: an existing concept is reused as is; alias merging comes later.
+                // An existing concept is reused; names it does not have yet become aliases
+                // (undoable with the rest of this commit).
                 let id = match kn::concept_by_slug(tx, user, slug).await? {
-                    Some(c) => c.id,
+                    Some(c) => {
+                        let mut known: Vec<String> = std::iter::once(&c.slug)
+                            .chain(std::iter::once(&c.title))
+                            .chain(&c.aliases)
+                            .map(|n| slugify(n))
+                            .collect();
+                        for name in std::iter::once(title).chain(aliases) {
+                            let key = slugify(name);
+                            if !key.is_empty() && !known.contains(&key) {
+                                kn::insert_alias(tx, commit, c.id, name.trim()).await?;
+                                known.push(key);
+                            }
+                        }
+                        c.id
+                    }
                     None => {
                         kn::insert_concept(tx, user, commit, slug, title, aliases)
                             .await?

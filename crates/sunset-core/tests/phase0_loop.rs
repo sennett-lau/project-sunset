@@ -3,20 +3,22 @@
 //! approve / reject / undo changes the wiki.
 
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 
 use sunset_core::domain::{
     AppEvent, ObservationKind, Proposal, ProposalStatus, ProposedChange, RelationKind, SaveMode,
     Speaker, VisualPayload,
 };
-use sunset_core::{AppIdentity, Sunset, SunsetConfig, mock};
+use sunset_core::{AppIdentity, MemorySecretStore, Sunset, SunsetConfig};
 use tokio::sync::broadcast::Receiver;
 
 async fn open(dir: &Path) -> Sunset {
     Sunset::open(SunsetConfig {
         identity: AppIdentity::new("Test", "dev.example.test").unwrap(),
         data_dir: dir.to_path_buf(),
-        providers: mock::providers(Duration::ZERO),
+        secrets: Arc::new(MemorySecretStore::default()),
+        demo_chunk_delay: Duration::ZERO,
     })
     .await
     .unwrap()

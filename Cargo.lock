@@ -3821,7 +3821,9 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 name = "sunset-core"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "futures",
+ "schemars 1.2.3",
  "serde",
  "serde_json",
  "sunset-domain",
@@ -3831,6 +3833,8 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing",
+ "url",
+ "wiremock",
 ]
 
 [[package]]

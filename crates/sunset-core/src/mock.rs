@@ -1,6 +1,5 @@
-//! Phase 0 demo models: a scripted tutor and curator that know one topic, "What is a VAE?".
-//! They let the whole loop run with no real model. Phase 1 replaces them with configured
-//! providers; tests keep using them.
+//! The built-in "Demo" provider: a scripted tutor and curator that know one topic,
+//! "What is a VAE?". The app uses it until a real model is configured, and tests use it.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -12,14 +11,21 @@ use sunset_domain::{
 use sunset_providers::ChatRequest;
 use sunset_providers::adapters::mock::MockChatModel;
 
-use crate::Providers;
+use sunset_domain::Role;
+use sunset_providers::ChatModel;
+
 use crate::knowledge::curator::{ANSWER_LABEL, CuratorOutput, ProposalDraft, QUESTION_LABEL};
 
-/// `chunk_delay` paces the streamed answer; use zero in tests.
-pub fn providers(chunk_delay: Duration) -> Providers {
-    Providers {
-        tutor: Arc::new(MockChatModel::new("mock/tutor", tutor).with_chunk_delay(chunk_delay)),
-        curator: Arc::new(MockChatModel::new("mock/curator", curator)),
+/// The only model name the Demo provider offers.
+pub const DEMO_MODEL: &str = "scripted";
+
+/// The scripted model for `role`. `chunk_delay` paces the streamed answer; zero in tests.
+pub fn model(role: Role, chunk_delay: Duration) -> Arc<dyn ChatModel> {
+    match role {
+        Role::Tutor => {
+            Arc::new(MockChatModel::new("demo/tutor", tutor).with_chunk_delay(chunk_delay))
+        }
+        Role::Curator => Arc::new(MockChatModel::new("demo/curator", curator)),
     }
 }
 
@@ -32,8 +38,8 @@ fn tutor(req: &ChatRequest) -> String {
     if is_about_vae(req.last_user_message().unwrap_or_default()) {
         VAE_ANSWER.to_owned()
     } else {
-        "(Mock tutor) Phase 0 has no real model yet, so I only know one topic. \
-         Try asking: \"What is a VAE?\""
+        "(Demo model) I am a scripted stand-in that knows one topic. Try asking \
+         \"What is a VAE?\", or connect a real model under Models."
             .to_owned()
     }
 }

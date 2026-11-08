@@ -1,16 +1,14 @@
 //! Durable background jobs. Each job is a row in `jobs`; unfinished rows run again on startup.
 //! Phase 0 has one kind, `curate_turn`.
 
-use std::collections::HashSet;
-
 use serde::{Deserialize, Serialize};
 use sunset_domain::{
-    AppEvent, JobId, Proposal, ProposalId, ProposalStatus, SaveMode, Turn, TurnId,
+    AppEvent, JobId, Proposal, ProposalId, ProposalStatus, Role, SaveMode, Turn, TurnId,
 };
 use sunset_store::repo::{jobs, knowledge as kn, proposals, sessions, users};
 
 use crate::knowledge::{apply, curator, validate};
-use crate::{CoreError, Result, Sunset};
+use crate::{CoreError, Result, Sunset, models};
 
 const CURATE_TURN: &str = "curate_turn";
 const MAX_ATTEMPTS: i64 = 3;
@@ -96,22 +94,18 @@ async fn curate(app: &Sunset, job: JobId, payload: CurateTurn) -> Result<()> {
     let tutor_turn = sessions::get_turn(&mut conn, payload.tutor_turn_id)
         .await?
         .ok_or(CoreError::NotFound("turn"))?;
-    let existing = kn::list_concepts(&mut conn, inner.user).await?;
+    let existing = kn::live_concepts(&mut conn, inner.user).await?;
     let save_mode = users::save_mode(&mut conn, inner.user).await?;
     drop(conn);
 
-    let output = curator::propose(
-        inner.providers.curator.as_ref(),
-        &user_turn,
-        &tutor_turn,
-        &existing,
-    )
-    .await?;
+    let model = models::model_for(app, Role::Curator).await?;
+    let output = curator::propose(model.as_ref(), &user_turn, &tutor_turn, &existing).await?;
 
-    let slugs: HashSet<String> = existing.into_iter().map(|c| c.slug).collect();
+    let names = validate::NameIndex::new(&existing);
     let mut created = Vec::new();
-    for draft in output.proposals {
-        if let Err(reason) = validate::draft(&draft, &slugs) {
+    for mut draft in output.proposals {
+        names.normalize(&mut draft);
+        if let Err(reason) = validate::draft(&draft, &names) {
             tracing::warn!(%reason, summary = %draft.summary, "dropped invalid proposal");
             continue;
         }

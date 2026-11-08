@@ -14,8 +14,11 @@ Change objects (field "op" selects the kind):
 - {"op": "add_visual", "concept": "<slug>", "title": "...", "payload": {"kind": "concept_flow", "nodes": [{"id": "x", "label": "Input"}], "edges": [{"source": "x", "target": "y", "label": null}]}}
 
 Rules:
-- Slugs are lowercase words joined by "-". Reuse an existing concept slug instead of creating a
-  synonym; existing slugs are listed in the request.
+- Slugs are lowercase words joined by "-". Reuse an existing concept instead of creating a
+  synonym: if the topic is already listed (by slug, title or alias), use its slug. Put
+  abbreviations and other names in "aliases".
+- Keep proposals small and focused: usually one proposal per exchange. Only add concepts that
+  the exchange actually explains.
 - Articles are general knowledge, useful to any reader. Never put the learner's questions or
   feelings in an article.
 - Observations are private notes about this learner. Record the learner's own question or

@@ -1,8 +1,10 @@
 //! Checks on curator output before it becomes a proposal. Invalid drafts are dropped.
+//! Real models drift, so names are normalized first: "VAE" and "Variational Autoencoder"
+//! resolve to the same existing concept (initial spec Part II §7.7).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use sunset_domain::{ProposedChange, VisualPayload, slugify};
+use sunset_domain::{Concept, ProposedChange, VisualPayload, slugify};
 
 use super::curator::ProposalDraft;
 
@@ -10,15 +12,89 @@ const MAX_CHANGES: usize = 50;
 const MAX_TEXT: usize = 20_000;
 const MAX_FLOW_NODES: usize = 40;
 
-/// `existing` holds the slugs of live concepts. Returns a reason when the draft is invalid.
-pub fn draft(d: &ProposalDraft, existing: &HashSet<String>) -> Result<(), String> {
+/// Maps every name of every live concept (slug, title, aliases; compared as slugs) to the
+/// concept's slug.
+pub struct NameIndex {
+    names: HashMap<String, String>,
+    slugs: HashSet<String>,
+}
+
+impl NameIndex {
+    pub fn new(concepts: &[Concept]) -> Self {
+        let mut names = HashMap::new();
+        for c in concepts {
+            for name in std::iter::once(&c.slug)
+                .chain(std::iter::once(&c.title))
+                .chain(&c.aliases)
+            {
+                names.entry(slugify(name)).or_insert_with(|| c.slug.clone());
+            }
+        }
+        Self {
+            names,
+            slugs: concepts.iter().map(|c| c.slug.clone()).collect(),
+        }
+    }
+
+    /// The existing concept a name refers to, if any.
+    pub fn resolve(&self, name: &str) -> Option<&str> {
+        self.names.get(&slugify(name)).map(String::as_str)
+    }
+
+    /// Rewrite slugs in place: tidy them, and point new names of existing concepts at the
+    /// existing slug. An upsert of a known concept then adds aliases instead of a duplicate.
+    pub fn normalize(&self, d: &mut ProposalDraft) {
+        let mut renamed: HashMap<String, String> = HashMap::new();
+        for change in &mut d.changes {
+            if let ProposedChange::UpsertConcept {
+                slug,
+                title,
+                aliases,
+            } = change
+            {
+                let original = slug.clone();
+                let existing = std::iter::once(slug.as_str())
+                    .chain(std::iter::once(title.as_str()))
+                    .chain(aliases.iter().map(String::as_str))
+                    .find_map(|n| self.resolve(n))
+                    .map(str::to_owned);
+                *slug = existing.unwrap_or_else(|| slugify(slug));
+                renamed.insert(original, slug.clone());
+            }
+        }
+        let fix = |s: &mut String| {
+            if let Some(new) = renamed.get(s.as_str()) {
+                *s = new.clone();
+            } else if let Some(existing) = self.resolve(s) {
+                *s = existing.to_owned();
+            } else {
+                *s = slugify(s);
+            }
+        };
+        for change in &mut d.changes {
+            match change {
+                ProposedChange::UpsertConcept { .. } => {}
+                ProposedChange::ReviseArticle { concept, .. }
+                | ProposedChange::AddObservation { concept, .. }
+                | ProposedChange::AddVisual { concept, .. } => fix(concept),
+                ProposedChange::AddRelation { from, to, .. } => {
+                    fix(from);
+                    fix(to);
+                }
+            }
+        }
+    }
+}
+
+/// Returns a reason when the draft is invalid. Run [`NameIndex::normalize`] first.
+pub fn draft(d: &ProposalDraft, existing: &NameIndex) -> Result<(), String> {
     if d.summary.trim().is_empty() {
         return Err("summary is empty".into());
     }
     if d.changes.is_empty() || d.changes.len() > MAX_CHANGES {
         return Err(format!("needs 1 to {MAX_CHANGES} changes"));
     }
-    let mut known: HashSet<&str> = existing.iter().map(String::as_str).collect();
+    let mut known: HashSet<&str> = existing.slugs.iter().map(String::as_str).collect();
     for change in &d.changes {
         if let ProposedChange::UpsertConcept { slug, .. } = change {
             known.insert(slug);
@@ -181,7 +257,63 @@ mod tests {
                 body_md: String::new(),
             }],
         };
-        assert!(draft(&d, &HashSet::new()).is_err());
-        assert!(draft(&d, &HashSet::from(["nope".to_owned()])).is_ok());
+        assert!(draft(&d, &NameIndex::new(&[])).is_err());
+        assert!(draft(&d, &NameIndex::new(&[concept("nope", "Nope", &[])])).is_ok());
+    }
+
+    fn concept(slug: &str, title: &str, aliases: &[&str]) -> Concept {
+        Concept {
+            id: sunset_domain::ConceptId::new(),
+            slug: slug.into(),
+            title: title.into(),
+            aliases: aliases.iter().map(|a| (*a).into()).collect(),
+            created_at: chrono::Utc::now(),
+        }
+    }
+
+    #[test]
+    fn normalize_maps_synonyms_to_the_existing_concept() {
+        let index = NameIndex::new(&[concept(
+            "variational-autoencoder",
+            "Variational Autoencoder",
+            &["VAE"],
+        )]);
+        let mut d = ProposalDraft {
+            summary: "s".into(),
+            changes: vec![
+                ProposedChange::UpsertConcept {
+                    slug: "VAE".into(),
+                    title: "VAE".into(),
+                    aliases: vec!["variational auto-encoder".into()],
+                },
+                ProposedChange::ReviseArticle {
+                    concept: "VAE".into(),
+                    summary: "x".into(),
+                    body_md: String::new(),
+                },
+                ProposedChange::AddRelation {
+                    from: "Variational Autoencoder".into(),
+                    to: "Latent Space".into(),
+                    kind: sunset_domain::RelationKind::Uses,
+                    label: None,
+                },
+            ],
+        };
+        index.normalize(&mut d);
+        let ProposedChange::UpsertConcept { slug, .. } = &d.changes[0] else {
+            panic!()
+        };
+        assert_eq!(slug, "variational-autoencoder");
+        let ProposedChange::ReviseArticle { concept, .. } = &d.changes[1] else {
+            panic!()
+        };
+        assert_eq!(concept, "variational-autoencoder");
+        let ProposedChange::AddRelation { from, to, .. } = &d.changes[2] else {
+            panic!()
+        };
+        assert_eq!(
+            (from.as_str(), to.as_str()),
+            ("variational-autoencoder", "latent-space")
+        );
     }
 }

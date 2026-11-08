@@ -1,11 +1,11 @@
 //! The fast path: store the user turn, stream the tutor answer, hand off to curation.
 
 use futures::StreamExt;
-use sunset_domain::{AppEvent, SendMessageResult, SessionId, Speaker, Turn, TurnId};
+use sunset_domain::{AppEvent, Role, SendMessageResult, SessionId, Speaker, Turn, TurnId};
 use sunset_providers::{ChatMessage, ChatRequest};
 use sunset_store::repo::sessions;
 
-use crate::{CoreError, Result, Sunset, jobs};
+use crate::{CoreError, Result, Sunset, jobs, models};
 
 const TUTOR_PROMPT: &str = include_str!("../prompts/tutor.md");
 /// How many earlier turns the tutor sees. Retrieval-based context arrives in Phase 2.
@@ -66,7 +66,8 @@ pub(crate) async fn send_message(
 async fn answer(app: &Sunset, history: &[Turn], user_turn: &Turn, turn_id: TurnId) -> Result<()> {
     let inner = &app.inner;
     let request = tutor_request(history);
-    let mut stream = inner.providers.tutor.stream(request).await?;
+    let tutor = models::model_for(app, Role::Tutor).await?;
+    let mut stream = tutor.stream(request).await?;
     let mut full = String::new();
     while let Some(delta) = stream.next().await {
         let delta = delta?;

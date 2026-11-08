@@ -10,8 +10,12 @@ mod error;
 mod jobs;
 mod knowledge;
 pub mod mock;
+mod models;
 
-pub use app::{Providers, Sunset, SunsetConfig};
+pub use app::{Sunset, SunsetConfig};
 pub use error::{CoreError, Result};
 pub use sunset_domain as domain;
 pub use sunset_domain::AppIdentity;
+#[cfg(target_os = "macos")]
+pub use sunset_providers::secrets::KeychainSecretStore;
+pub use sunset_providers::secrets::{MemorySecretStore, SecretStore};

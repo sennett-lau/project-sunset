@@ -1,30 +1,31 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use sunset_domain::{
-    AppEvent, AppIdentity, ConceptId, ConceptPage, ConceptSummary, GraphView, Proposal, ProposalId,
-    ProposalStatus, RelationView, SaveMode, SendMessageResult, SessionId, Turn, UserId,
+    AppEvent, AppIdentity, ConceptId, ConceptPage, ConceptSummary, GraphView, ModelSettings,
+    ProbeReport, Proposal, ProposalId, ProposalStatus, ProviderId, ProviderInput, ProviderProfile,
+    RelationView, Role, SaveMode, SendMessageResult, SessionId, Turn, UserId,
 };
-use sunset_providers::ChatModel;
+use sunset_providers::HttpClient;
+use sunset_providers::adapters::openai_compat::http_client;
+use sunset_providers::secrets::SecretStore;
 use sunset_store::Store;
 use sunset_store::repo::{knowledge as kn, proposals, sessions, users};
 use tokio::sync::broadcast;
 
 use crate::bus::EventBus;
-use crate::{CoreError, Result, conversation, jobs, knowledge};
-
-/// The model behind each role (docs/architecture.md §4.3).
-#[derive(Clone)]
-pub struct Providers {
-    pub tutor: Arc<dyn ChatModel>,
-    pub curator: Arc<dyn ChatModel>,
-}
+use crate::{CoreError, Result, conversation, jobs, knowledge, models};
 
 pub struct SunsetConfig {
     pub identity: AppIdentity,
     /// Chosen by the host. On macOS: `~/Library/Application Support/<bundle id>`.
     pub data_dir: PathBuf,
-    pub providers: Providers,
+    /// Where API keys live. The desktop app passes the macOS Keychain.
+    pub secrets: Arc<dyn SecretStore>,
+    /// Pace of the Demo provider's streamed answer. Zero in tests.
+    pub demo_chunk_delay: Duration,
 }
 
 /// Entry point of the core. Cheap to clone; clones share state.
@@ -38,8 +39,11 @@ pub(crate) struct Inner {
     pub data_dir: PathBuf,
     pub store: Store,
     pub user: UserId,
-    pub providers: Providers,
     pub bus: EventBus,
+    pub http: HttpClient,
+    pub secrets: Arc<dyn SecretStore>,
+    pub key_cache: Mutex<HashMap<ProviderId, Option<String>>>,
+    pub demo_chunk_delay: Duration,
 }
 
 impl Sunset {
@@ -53,10 +57,14 @@ impl Sunset {
                 data_dir: config.data_dir,
                 store,
                 user,
-                providers: config.providers,
                 bus: EventBus::new(),
+                http: http_client(),
+                secrets: config.secrets,
+                key_cache: Mutex::new(HashMap::new()),
+                demo_chunk_delay: config.demo_chunk_delay,
             }),
         };
+        models::ensure_defaults(&sunset).await?;
         jobs::resume(&sunset).await?;
         Ok(sunset)
     }
@@ -128,6 +136,39 @@ impl Sunset {
     pub async fn set_save_mode(&self, mode: SaveMode) -> Result<()> {
         let mut conn = self.inner.store.conn().await?;
         Ok(users::set_save_mode(&mut conn, self.inner.user, mode).await?)
+    }
+
+    // ---- models -----------------------------------------------------------------------------
+
+    pub async fn model_settings(&self) -> Result<ModelSettings> {
+        models::settings(self).await
+    }
+
+    /// Create (`id` = None) or edit a provider. An API key goes to the Keychain only.
+    pub async fn save_provider(
+        &self,
+        id: Option<ProviderId>,
+        input: ProviderInput,
+    ) -> Result<ProviderProfile> {
+        models::save_provider(self, id, input).await
+    }
+
+    pub async fn delete_provider(&self, id: ProviderId) -> Result<()> {
+        models::delete_provider(self, id).await
+    }
+
+    /// Model ids the provider offers, if its server lists them.
+    pub async fn list_models(&self, id: ProviderId) -> Result<Vec<String>> {
+        models::list_models(self, id).await
+    }
+
+    /// Probe what `model` supports and remember it.
+    pub async fn test_connection(&self, id: ProviderId, model: &str) -> Result<ProbeReport> {
+        models::test_connection(self, id, model).await
+    }
+
+    pub async fn set_role(&self, role: Role, id: ProviderId, model: &str) -> Result<()> {
+        models::set_role(self, role, id, model).await
     }
 
     // ---- wiki and graph ---------------------------------------------------------------------
