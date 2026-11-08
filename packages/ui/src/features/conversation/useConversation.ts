@@ -1,5 +1,7 @@
 import type { AppEvent, SessionId, Speaker, TurnId } from "@sunset/client";
-import { useCallback, useReducer } from "react";
+import { useCallback, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { keys } from "../../query-keys";
 import { useClient } from "../../client-context";
 
 export interface Message {
@@ -63,47 +65,87 @@ function reducer(state: State, action: Action): State {
   }
 }
 
+/** Buffer before acknowledgement: only the returned session may consume early events. */
 export function useConversation() {
   const client = useClient();
-  const [state, dispatch] = useReducer(reducer, { sessionId: null, messages: [] });
+  const queries = useQueryClient();
+  const [state, setState] = useState<State>({ sessionId: null, messages: [] });
+  const current = useRef(state);
+  const lock = useRef(false);
+  const buffer = useRef<AppEvent[] | null>(null);
+  const [working, setWorking] = useState<"sending" | "loading" | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const replace = useCallback((next: State) => { current.current = next; setState(next); }, []);
+  const dispatch = useCallback((action: Action) => replace(reducer(current.current, action)), [replace]);
+  const apply = useCallback((event: AppEvent) => {
+    const sid = current.current.sessionId;
+    if (!sid) return;
+    if (event.type === "tutor_delta" && event.sessionId === sid)
+      dispatch({ type: "upsert", id: event.turnId, speaker: "tutor", text: event.text, pending: true, append: true });
+    if (event.type === "turn_finalized" && event.turn.sessionId === sid)
+      dispatch({ type: "upsert", id: event.turn.id, speaker: event.turn.speaker, text: event.turn.text, pending: false });
+    if (event.type === "tutor_failed" && event.sessionId === sid)
+      dispatch({ type: "failed", id: event.turnId, message: event.message });
+  }, [dispatch]);
+  const onEvent = useCallback((event: AppEvent) => {
+    if (event.type !== "tutor_delta" && event.type !== "turn_finalized" && event.type !== "tutor_failed") return;
+    if (buffer.current) buffer.current.push(event);
+    else apply(event);
+  }, [apply]);
+  const isBusy = () => lock.current || current.current.messages.some((m) => m.pending);
 
-  const onEvent = useCallback(
-    (event: AppEvent) => {
-      // Until the first reply we do not know our session id, so accept any session.
-      const mine = (id: SessionId) => state.sessionId === null || id === state.sessionId;
-      switch (event.type) {
-        case "tutor_delta":
-          if (mine(event.sessionId)) {
-            dispatch({ type: "upsert", id: event.turnId, speaker: "tutor", text: event.text, pending: true, append: true });
-          }
-          break;
-        case "turn_finalized": {
-          const t = event.turn;
-          if (mine(t.sessionId)) {
-            dispatch({ type: "upsert", id: t.id, speaker: t.speaker, text: t.text, pending: false });
-          }
-          break;
-        }
-        case "tutor_failed":
-          if (mine(event.sessionId)) dispatch({ type: "failed", id: event.turnId, message: event.message });
-          break;
-      }
-    },
-    [state.sessionId],
-  );
-
-  const send = useCallback(
-    async (text: string) => {
-      const result = await client.sendMessage(state.sessionId, text);
+  const send = async (text: string) => {
+    if (isBusy()) return;
+    lock.current = true;
+    setWorking("sending");
+    buffer.current = [];
+    try {
+      const result = await client.sendMessage(current.current.sessionId, text);
       dispatch({ type: "session", sessionId: result.sessionId });
-      const t = result.userTurn;
-      dispatch({ type: "upsert", id: t.id, speaker: t.speaker, text: t.text, pending: false });
+      dispatch({ type: "upsert", id: result.userTurn.id, speaker: "user", text: result.userTurn.text, pending: false });
       dispatch({ type: "upsert", id: result.tutorTurnId, speaker: "tutor", text: "", pending: true, append: true });
-    },
-    [client, state.sessionId],
-  );
+      for (const event of buffer.current) apply(event);
+      void queries.invalidateQueries({ queryKey: keys.sessions });
+    } catch (error) {
+      // Preserve updates to an already known session even if acknowledgement fails.
+      for (const event of buffer.current) apply(event);
+      throw error;
+    } finally {
+      buffer.current = null;
+      lock.current = false;
+      setWorking(null);
+    }
+  };
 
-  return { messages: state.messages, send, onEvent };
+  const resume = async (sessionId: SessionId) => {
+    if (isBusy() || sessionId === current.current.sessionId) return;
+    lock.current = true;
+    setWorking("loading");
+    setHistoryError(null);
+    buffer.current = [];
+    try {
+      const turns = await client.listTurns(sessionId);
+      replace({ sessionId, messages: turns.map((t) => ({ id: t.id, speaker: t.speaker, text: t.text, pending: false })) });
+      for (const event of buffer.current) apply(event);
+    } catch (error) {
+      setHistoryError(String(error));
+      // A failed load leaves the previous transcript intact.
+      for (const event of buffer.current) apply(event);
+    } finally {
+      buffer.current = null;
+      lock.current = false;
+      setWorking(null);
+    }
+  };
+
+  const newConversation = () => {
+    if (isBusy()) return;
+    replace({ sessionId: null, messages: [] });
+    setHistoryError(null);
+  };
+  return { ...state, send, onEvent, resume, newConversation, historyError,
+    loadingHistory: working === "loading",
+    busy: Boolean(working) || state.messages.some((m) => m.pending) };
 }
 
 export type ConversationState = ReturnType<typeof useConversation>;

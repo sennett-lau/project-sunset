@@ -1,57 +1,105 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useClient } from "../../client-context";
+import { keys } from "../../query-keys";
 import { Markdown } from "../wiki/Markdown";
 import type { ConversationState } from "./useConversation";
 
-export function Conversation({ state }: { state: ConversationState }) {
+export function Conversation({ state, onOpenModels }: { state: ConversationState; onOpenModels?: () => void }) {
+  const client = useClient();
+  const settings = useQuery({ queryKey: keys.models, queryFn: () => client.modelSettings() });
+  const tutor = settings.data?.roles.find((r) => r.role === "tutor");
+  const demo = settings.data?.providers.find((p) => p.id === tutor?.providerId)?.kind === "demo";
+  const [sending, setSending] = useState(false);
+  const inFlight = useRef(false);
+  const input = useRef<HTMLTextAreaElement>(null);
+  const following = useRef(true);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
-  const busy = state.messages.some((m) => m.pending);
+  const busy = state.busy;
+  const sessions = useQuery({ queryKey: keys.sessions, queryFn: () => client.listSessions(100) });
+  useEffect(() => { setDraft(""); setError(null); following.current = true; }, [state.sessionId]);
 
   useEffect(() => {
-    bottom.current?.scrollIntoView({ block: "end" });
+    if (following.current) bottom.current?.scrollIntoView({ block: "end" });
   }, [state.messages]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     const text = draft.trim();
-    if (!text) return;
+    if (!text || busy || inFlight.current) return;
+    inFlight.current = true;
+    setSending(true);
+    following.current = true;
     setError(null);
     try {
       await state.send(text);
       setDraft("");
     } catch (err) {
       setError(String(err));
+    } finally {
+      inFlight.current = false;
+      setSending(false);
+      input.current?.focus();
     }
   }
 
   return (
     <>
-      <div className="min-h-0 flex-1 space-y-4 overflow-auto px-5 py-4">
+      <div className="conversation-history">
+        <label className="eyebrow" htmlFor="conversation-history">Return to an idea</label>
+        <div>
+          <select id="conversation-history" aria-label="Conversation history" value={state.sessionId ?? ""} disabled={busy}
+            onChange={(e) => { if (e.target.value) void state.resume(e.target.value); }}>
+            <option value="">Choose a conversation…</option>
+            {state.sessionId && !sessions.data?.some((s) => s.id === state.sessionId) && <option value={state.sessionId}>Current conversation</option>}
+            {sessions.data?.map((s, i) => <option key={s.id} value={s.id}>{new Date(s.createdAt).toLocaleString()} · {sessions.data.length - i}</option>)}
+          </select>
+          <button disabled={busy} onClick={state.newConversation}>New conversation</button>
+        </div>
+        {sessions.isPending && <p role="status">Loading conversations…</p>}
+        {sessions.error && <p role="alert">Could not load conversations. <button onClick={() => void sessions.refetch()}>Retry history</button></p>}
+        {state.historyError && <p role="alert">Could not open conversation: {state.historyError}. Choose it again to retry.</p>}
+      </div>
+      <div className="conversation-scroll" onScroll={(e) => { const el = e.currentTarget; following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100; }}>
+        {demo && <div className="demo-notice"><span className="eyebrow">Offline demo</span><p>A scripted introduction to VAEs. Connect a model for open-ended learning.</p>{onOpenModels && <button onClick={onOpenModels}>Connect a model ↗</button>}</div>}
         {state.messages.length === 0 && (
-          <p className="mt-10 text-center text-stone-500">
-            Ask anything to start learning. In Phase 0, try “What is a VAE?”
-          </p>
+          <div className="welcome">
+            <p className="eyebrow">Start with a question</p>
+            <h2>Make room for<br /><em>an idea.</em></h2>
+            <p>Talk it through with your tutor. Useful ideas become proposed articles and connections for your personal wiki.</p>
+            <button className="starter-question" onClick={() => { setDraft("What is a VAE?"); input.current?.focus(); }}>What is a VAE? <span aria-hidden="true">↗</span></button>
+            <ol className="onboarding-steps"><li><strong>Ask</strong> a question in your own words.</li><li><strong>Review</strong> proposed updates when you’re ready.</li><li><strong>Revisit</strong> your wiki as understanding grows.</li></ol>
+          </div>
         )}
         {state.messages.map((m) => (
           <div key={m.id} className={m.speaker === "user" ? "flex justify-end" : ""}>
             <div
-              className={`max-w-[85%] rounded-2xl px-4 py-2.5 leading-relaxed ${
+              className={`message max-w-[95%] rounded-2xl px-4 py-2.5 leading-relaxed ${
                 m.speaker === "user" ? "whitespace-pre-wrap bg-orange-100" : "bg-white shadow-sm"
               }`}
             >
+              <p className="message-speaker">{m.speaker === "user" ? "You" : "Tutor"}</p>
               {m.speaker === "user" ? m.text : <Markdown source={m.text} className="prose-sm" />}
               {m.pending && <span className="ml-0.5 animate-pulse">▍</span>}
-              {m.error && <p className="mt-1 text-sm text-red-700">Could not answer: {m.error}</p>}
+              {m.error && <p role="alert" className="mt-1 text-sm text-red-700">Could not answer: {m.error}</p>}
             </div>
           </div>
         ))}
         <div ref={bottom} />
       </div>
-      <form onSubmit={submit} className="border-t border-stone-200 p-3">
-        {error && <p className="mb-2 text-sm text-red-700">{error}</p>}
+      <form onSubmit={submit} className="composer">
+        <label htmlFor="question" className="eyebrow">Your next question</label>
+        {error && <p role="alert" className="mb-2 text-sm text-red-700">{error}</p>}
         <div className="flex gap-2">
-          <input
+          <textarea
+            id="question"
+            ref={input}
+            rows={2}
+            readOnly={sending}
+            aria-busy={sending}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void submit(e); } }}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Type a question…"
@@ -59,12 +107,13 @@ export function Conversation({ state }: { state: ConversationState }) {
           />
           <button
             type="submit"
-            disabled={busy || !draft.trim()}
+            disabled={sending || busy || !draft.trim()}
             className="rounded-lg bg-orange-500 px-4 py-2 font-medium text-white disabled:opacity-40"
           >
-            Send
+            {sending ? "Sending…" : "Send"}
           </button>
         </div>
+        <p className="composer-hint" role="status">{state.loadingHistory ? "Opening conversation…" : busy ? "Your tutor is responding…" : "Enter to send · Shift + Enter for a new line · Text conversation"}</p>
       </form>
     </>
   );
