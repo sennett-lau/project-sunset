@@ -1,9 +1,9 @@
 name: CI
 
+# Manual only. All checks run locally for now (`pnpm check`); GitHub Actions is not in use.
+# To run this workflow, start it by hand from the Actions tab or `gh workflow run CI`.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
