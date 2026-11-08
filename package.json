@@ -1,0 +1,21 @@
+{
+  "name": "project-sunset",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @sunset/desktop tauri dev",
+    "build": "pnpm --filter @sunset/desktop tauri build",
+    "typecheck": "pnpm -r typecheck",
+    "identity:sync": "node scripts/identity.mjs sync",
+    "identity:check": "node scripts/identity.mjs check",
+    "check": "pnpm identity:check && pnpm typecheck && cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}
