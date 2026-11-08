@@ -68,7 +68,7 @@ Requirements:
 ```sh
 pnpm install
 pnpm dev      # run the desktop app with hot reload
-pnpm check    # what CI runs: identity check, typecheck, fmt, clippy, tests
+pnpm check    # run before every commit: identity check, typecheck, fmt, clippy, tests
 pnpm build    # build the .app and .dmg
 ```
 

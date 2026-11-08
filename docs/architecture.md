@@ -32,7 +32,7 @@ phases in §8.
 
 ```text
 project-sunset/
-├── .github/workflows/ci.yml   # [P0] fmt, clippy, tests, typecheck, identity check
+├── .github/workflows/ci.yml   # [P0] manual only; checks run locally with `pnpm check`
 ├── .editorconfig              # [P0]
 ├── rust-toolchain.toml        # [P0] pinned Rust version
 ├── Cargo.toml                 # [P0] Rust workspace
@@ -243,7 +243,7 @@ How each place gets them:
 
 | Where | Field(s) | How |
 |---|---|---|
-| `apps/desktop/src-tauri/tauri.conf.json` | `productName`, `identifier`, main window `title` | Copied by `pnpm identity:sync`. CI runs `pnpm identity:check` and fails if they drift. |
+| `apps/desktop/src-tauri/tauri.conf.json` | `productName`, `identifier`, main window `title` | Copied by `pnpm identity:sync`. `pnpm check` runs `pnpm identity:check`, which fails if they drift. |
 | Rust (`src-tauri`) | both | Read at runtime from the Tauri config, turned into `sunset_domain::AppIdentity`, passed to `sunset-core`. |
 | `sunset-core` and below | both | Only through the injected `AppIdentity`. Never a string literal. |
 | App data directory | bundle id | Derived by Tauri (`app_data_dir()`); passed into the core as a path. |

@@ -3,7 +3,7 @@
 // See docs/architecture.md §2.7.
 //
 //   node scripts/identity.mjs sync    write the values into each target file
-//   node scripts/identity.mjs check   exit 1 if any target file is out of date (used by CI)
+//   node scripts/identity.mjs check   exit 1 if any target file is out of date (used by `pnpm check`)
 //
 // To add a place that needs the product name or bundle id, add a target below.
 // Prefer reading the value at runtime or build time instead, so the list stays short.

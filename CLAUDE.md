@@ -77,7 +77,7 @@ Run from the repo root.
 | `pnpm install` | Install JS dependencies |
 | `pnpm dev` | Run the desktop app (Vite + Tauri, hot reload) |
 | `pnpm build` | Build the macOS `.app` / `.dmg` |
-| `pnpm check` | Everything CI runs: identity check, typecheck, `cargo fmt --check`, clippy, tests |
+| `pnpm check` | Identity check, typecheck, `cargo fmt --check`, clippy, tests. **Run before every commit;** there is no automatic CI |
 | `pnpm typecheck` | TypeScript only |
 | `pnpm identity:sync` | Copy `app-identity.json` into files that need a literal copy |
 | `cargo test --workspace` | Rust tests only |
