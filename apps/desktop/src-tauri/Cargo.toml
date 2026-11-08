@@ -13,8 +13,14 @@ name = "sunset_desktop"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+serde.workspace = true
+specta.workspace = true
+specta-typescript.workspace = true
 sunset-core.workspace = true
 tauri = { version = "2", features = [] }
+tauri-specta.workspace = true
+tokio.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true

@@ -1,0 +1,15 @@
+{
+  "name": "@sunset/bindings",
+  "private": true,
+  "type": "module",
+  "description": "TypeScript types and Tauri command wrappers generated from Rust. Never edit by hand; run `pnpm gen:bindings`.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.4"
+  }
+}
