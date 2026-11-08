@@ -8,12 +8,15 @@ mod codec;
 mod db;
 pub mod repo;
 pub mod search;
+pub mod vault;
 
 pub use db::{Store, Tx};
 pub use sqlx::SqliteConnection;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
+    #[error("vault I/O: {0}")]
+    Io(#[from] std::io::Error),
     #[error("database error: {0}")]
     Sqlx(#[from] sqlx::Error),
     #[error("migration failed: {0}")]
