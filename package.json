@@ -10,9 +10,11 @@
     "dev": "pnpm --filter @sunset/desktop tauri dev",
     "build": "pnpm --filter @sunset/desktop tauri build",
     "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "gen:bindings": "SUNSET_WRITE_BINDINGS=1 cargo test -p sunset-desktop typescript_bindings",
     "identity:sync": "node scripts/identity.mjs sync",
     "identity:check": "node scripts/identity.mjs check",
-    "check": "pnpm identity:check && pnpm typecheck && cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    "check": "pnpm identity:check && pnpm typecheck && pnpm test && cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
