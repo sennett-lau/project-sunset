@@ -191,7 +191,10 @@ async fn small_talk_proposes_nothing_and_proposals_survive_restart() {
         _ => None,
     })
     .await;
-    assert_eq!(app.pending_proposals().await.unwrap(), [proposal.clone()]);
+    assert_eq!(
+        app.pending_proposals().await.unwrap(),
+        std::slice::from_ref(&proposal)
+    );
     assert_eq!(app.turns(hello.session_id).await.unwrap().len(), 4);
     app.close().await;
 
