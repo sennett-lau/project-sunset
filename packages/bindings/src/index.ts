@@ -7,6 +7,12 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 
 /** Commands */
 export const commands = {
+	searchKnowledge: (query: string, limit: number) => __TAURI_INVOKE<ConceptSummary[]>("search_knowledge", { query, limit }),
+	listSessions: (limit: number) => __TAURI_INVOKE<Session[]>("list_sessions", { limit }),
+	exportPublic: () => __TAURI_INVOKE<PublicExportFile[]>("export_public"),
+	exportPublicToFolder: () => __TAURI_INVOKE<string>("export_public_to_folder"),
+	syncVault: () => __TAURI_INVOKE<VaultStatus>("sync_vault"),
+	vaultStatus: () => __TAURI_INVOKE<VaultStatus>("vault_status"),
 	sendMessage: (sessionId: SessionId | null, text: string) => __TAURI_INVOKE<SendMessageResult>("send_message", { sessionId, text }),
 	listTurns: (sessionId: SessionId) => __TAURI_INVOKE<Turn[]>("list_turns", { sessionId }),
 	pendingProposals: () => __TAURI_INVOKE<Proposal[]>("pending_proposals"),
@@ -279,6 +285,12 @@ export type ProviderProfile = {
 	createdAt: string,
 };
 
+/**  Public Markdown only. Never includes private observations, transcripts or evidence turn IDs. */
+export type PublicExportFile = {
+	filename: string,
+	markdown: string,
+};
+
 /**  A typed, directed edge between two concepts: `from --kind--> to`. */
 export type Relation = {
 	id: RelationId,
@@ -329,6 +341,12 @@ export type SendMessageResult = {
 	tutorTurnId: TurnId,
 };
 
+/**  One conversation episode. */
+export type Session = {
+	id: SessionId,
+	createdAt: string,
+};
+
 export type SessionId = string;
 
 export type SliderParam = {
@@ -352,6 +370,13 @@ export type Turn = {
 };
 
 export type TurnId = string;
+
+export type VaultStatus = {
+	path: string,
+	/**  User-edited or unmanaged paths left untouched. */
+	conflicts: string[],
+	error: string | null,
+};
 
 export type VisualArtifact = {
 	id: ArtifactId,

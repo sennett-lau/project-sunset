@@ -18,6 +18,12 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         // One TypeScript type per Rust type; our types serialize and deserialize the same way.
         .disable_serde_phases()
         .commands(collect_commands![
+            commands::search_knowledge,
+            commands::list_sessions,
+            commands::export_public,
+            commands::export_public_to_folder,
+            commands::sync_vault,
+            commands::vault_status,
             commands::send_message,
             commands::list_turns,
             commands::pending_proposals,

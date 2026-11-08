@@ -142,3 +142,46 @@ pub async fn set_role(
         .await
         .map_err(err)
 }
+
+#[tauri::command]
+#[specta::specta]
+pub async fn search_knowledge(
+    sunset: State<'_, Sunset>,
+    query: String,
+    limit: u32,
+) -> CmdResult<Vec<ConceptSummary>> {
+    sunset.search_knowledge(&query, limit).await.map_err(err)
+}
+#[tauri::command]
+#[specta::specta]
+pub async fn list_sessions(
+    sunset: State<'_, Sunset>,
+    limit: u32,
+) -> CmdResult<Vec<sunset_core::domain::Session>> {
+    sunset.list_sessions(limit).await.map_err(err)
+}
+#[tauri::command]
+#[specta::specta]
+pub async fn export_public(
+    sunset: State<'_, Sunset>,
+) -> CmdResult<Vec<sunset_core::domain::PublicExportFile>> {
+    sunset.export_public().await.map_err(err)
+}
+#[tauri::command]
+#[specta::specta]
+pub async fn sync_vault(sunset: State<'_, Sunset>) -> CmdResult<sunset_core::domain::VaultStatus> {
+    Ok(sunset.sync_vault().await)
+}
+#[tauri::command]
+#[specta::specta]
+pub async fn vault_status(
+    sunset: State<'_, Sunset>,
+) -> CmdResult<sunset_core::domain::VaultStatus> {
+    Ok(sunset.vault_status())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn export_public_to_folder(sunset: State<'_, Sunset>) -> CmdResult<String> {
+    sunset.export_public_to_folder().await.map_err(err)
+}

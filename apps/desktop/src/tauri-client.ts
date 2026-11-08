@@ -3,6 +3,12 @@ import { commands, events } from "@sunset/bindings";
 import type { SunsetClient } from "@sunset/client";
 
 export const tauriClient: SunsetClient = {
+  searchKnowledge: commands.searchKnowledge,
+  listSessions: commands.listSessions,
+  exportPublicToFolder: commands.exportPublicToFolder,
+  exportPublic: commands.exportPublic,
+  vaultStatus: commands.vaultStatus,
+  syncVault: commands.syncVault,
   sendMessage: commands.sendMessage,
   listTurns: commands.listTurns,
   pendingProposals: commands.pendingProposals,

@@ -3,6 +3,9 @@
 
 import type {
   AppEvent,
+  Session,
+  PublicExportFile,
+  VaultStatus,
   ConceptId,
   ConceptPage,
   ConceptSummary,
@@ -24,6 +27,14 @@ import type {
 export type * from "@sunset/bindings";
 
 export interface SunsetClient {
+  /** Literal lexical search of approved public knowledge; not semantic search. */
+  searchKnowledge(query: string, limit: number): Promise<ConceptSummary[]>;
+  listSessions(limit: number): Promise<Session[]>;
+  /** Write a fresh public snapshot in the app-owned exports folder; returns its path. */
+  exportPublicToFolder(): Promise<string>;
+  exportPublic(): Promise<PublicExportFile[]>;
+  vaultStatus(): Promise<VaultStatus>;
+  syncVault(): Promise<VaultStatus>;
   /** Returns at once. The answer arrives as `tutor_delta` events, then `turn_finalized`. */
   sendMessage(sessionId: SessionId | null, text: string): Promise<SendMessageResult>;
   listTurns(sessionId: SessionId): Promise<Turn[]>;

@@ -9,6 +9,8 @@ import type {
   ProviderProfile,
   RoleAssignment,
   SaveMode,
+  Session,
+  Turn,
   SunsetClient,
 } from "@sunset/client";
 
@@ -20,6 +22,8 @@ export function createFakeClient(): SunsetClient {
   const listeners = new Set<(e: AppEvent) => void>();
   const emit = (e: AppEvent) => listeners.forEach((l) => l(e));
   const proposals: Proposal[] = [];
+  const sessions: Session[] = [];
+  const turns: Turn[] = [];
   let concepts: Concept[] = [];
   let mode: SaveMode = "approval";
   const untested: ModelCapabilities = { streaming: "needs_test", jsonSchema: "needs_test", toolCalls: "needs_test", probedAt: null };
@@ -46,15 +50,27 @@ export function createFakeClient(): SunsetClient {
   };
 
   return {
+    async searchKnowledge(query, limit) {
+      return concepts.filter((c) => [c.title, ...c.aliases].some((text) => text.toLocaleLowerCase().includes(query.toLocaleLowerCase()))).slice(0, limit).map(({ id, slug, title }) => ({ id, slug, title }));
+    },
+    async listSessions(limit) { return sessions.slice(0, limit).map((s) => ({ ...s })); },
+    async exportPublic() { return []; },
+    async exportPublicToFolder() { return "/test/exports/public-" + id(); },
+    async vaultStatus() { return { path: "/test/vault", conflicts: [], error: null }; },
+    async syncVault() { return this.vaultStatus(); },
     async sendMessage(sessionId, text) {
       const sid = sessionId ?? id();
+      if (!sessions.some((s) => s.id === sid)) sessions.unshift({ id: sid, createdAt: now() });
       const userTurn = { id: id(), sessionId: sid, speaker: "user" as const, text, createdAt: now() };
       const tutorTurnId = id();
+      turns.push(userTurn);
       emit({ type: "turn_finalized", turn: userTurn });
       queueMicrotask(() => {
         const answer = "A VAE encodes data as a distribution.";
         for (const w of answer.split(/(?<= )/)) emit({ type: "tutor_delta", sessionId: sid, turnId: tutorTurnId, text: w });
-        emit({ type: "turn_finalized", turn: { id: tutorTurnId, sessionId: sid, speaker: "tutor", text: answer, createdAt: now() } });
+        const tutorTurn: Turn = { id: tutorTurnId, sessionId: sid, speaker: "tutor", text: answer, createdAt: now() };
+        turns.push(tutorTurn);
+        emit({ type: "turn_finalized", turn: tutorTurn });
         const proposal: Proposal = {
           id: id(),
           sessionId: sid,
@@ -73,8 +89,8 @@ export function createFakeClient(): SunsetClient {
       });
       return { sessionId: sid, userTurn, tutorTurnId };
     },
-    async listTurns() {
-      return [];
+    async listTurns(sessionId) {
+      return turns.filter((t) => t.sessionId === sessionId).map((t) => ({ ...t }));
     },
     async pendingProposals() {
       return proposals.filter((p) => p.status === "awaiting_approval").map((p) => ({ ...p }));
