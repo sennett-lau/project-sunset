@@ -59,24 +59,28 @@ pub async fn list_recent(conn: &mut SqliteConnection, limit: u32) -> Result<Vec<
         .collect()
 }
 
-/// Proposal state is a cached view of the commit log, so it may be updated.
-pub async fn set_status(
+/// Move a proposal from `from` to `to`. Returns false (and changes nothing) if it is not in
+/// `from`, so two clicks on Approve cannot both win. Proposal state is a cached view of the
+/// commit log, so unlike commits it may be updated.
+pub async fn transition(
     conn: &mut SqliteConnection,
     id: ProposalId,
-    status: ProposalStatus,
+    from: ProposalStatus,
+    to: ProposalStatus,
     commit_id: Option<CommitId>,
-) -> Result<()> {
-    sqlx::query(
+) -> Result<bool> {
+    let done = sqlx::query(
         "UPDATE proposals SET status = ?, commit_id = COALESCE(?, commit_id), updated_at = ? \
-         WHERE id = ?",
+         WHERE id = ? AND status = ?",
     )
-    .bind(codec::tag(&status)?)
+    .bind(codec::tag(&to)?)
     .bind(commit_id.map(|c| c.to_string()))
     .bind(Utc::now())
     .bind(id.to_string())
+    .bind(codec::tag(&from)?)
     .execute(&mut *conn)
     .await?;
-    Ok(())
+    Ok(done.rows_affected() == 1)
 }
 
 fn from_row(row: &SqliteRow) -> Result<Proposal> {

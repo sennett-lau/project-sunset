@@ -8,7 +8,7 @@ mod codec;
 mod db;
 pub mod repo;
 
-pub use db::Store;
+pub use db::{Store, Tx};
 pub use sqlx::SqliteConnection;
 
 #[derive(Debug, thiserror::Error)]

@@ -37,11 +37,35 @@ impl Store {
         Ok(self.pool.acquire().await?)
     }
 
-    pub async fn begin(&self) -> Result<Transaction<'static, Sqlite>> {
-        Ok(self.pool.begin().await?)
+    /// Start a transaction. Dropping it without [`Tx::commit`] rolls back.
+    pub async fn begin(&self) -> Result<Tx> {
+        Ok(Tx(self.pool.begin().await?))
     }
 
     pub async fn close(&self) {
         self.pool.close().await;
+    }
+}
+
+/// A database transaction. Derefs to a connection, so `repo` functions accept `&mut tx`.
+pub struct Tx(Transaction<'static, Sqlite>);
+
+impl Tx {
+    pub async fn commit(self) -> Result<()> {
+        Ok(self.0.commit().await?)
+    }
+}
+
+impl std::ops::Deref for Tx {
+    type Target = sqlx::SqliteConnection;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Tx {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
