@@ -5,7 +5,7 @@ members = ["crates/*", "apps/desktop/src-tauri"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.90"
+rust-version = "1.94"
 publish = false
 
 [workspace.dependencies]
@@ -14,7 +14,21 @@ sunset-providers = { path = "crates/sunset-providers" }
 sunset-store = { path = "crates/sunset-store" }
 sunset-core = { path = "crates/sunset-core" }
 
+async-trait = "0.1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# specta, specta-typescript and tauri-specta are pre-releases that must match each other exactly.
+specta = { version = "=2.0.0-rc.26", features = ["derive", "uuid", "chrono", "serde_json"] }
+specta-typescript = "=0.0.13"
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite-bundled", "migrate", "macros", "json", "chrono", "uuid"] }
+tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
+tempfile = "3"
 thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+tracing = "0.1"
+uuid = { version = "1", features = ["v7", "serde"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
