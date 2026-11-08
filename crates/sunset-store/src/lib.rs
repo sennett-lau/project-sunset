@@ -7,6 +7,7 @@
 mod codec;
 mod db;
 pub mod repo;
+pub mod search;
 
 pub use db::{Store, Tx};
 pub use sqlx::SqliteConnection;
