@@ -36,3 +36,22 @@ test("add a local provider, test a model and use it for the tutor", async () => 
   });
   await screen.findByText("qwen3:8b", { selector: "header span" });
 });
+
+test("connection testing locks the selected provider and model until results arrive", async () => {
+  const client = createFakeClient();
+  const original = client.testConnection;
+  let finish!: () => void;
+  client.testConnection = async (provider, model) => {
+    await new Promise<void>((resolve) => { finish = resolve; });
+    return original(provider, model);
+  };
+  render(<App client={client} productName="Test" />);
+  fireEvent.click(await screen.findByRole("button", { name: /Models/ }));
+  const panel = screen.getByRole("complementary", { name: "Models" });
+  fireEvent.click((await within(panel).findAllByRole("button", { name: "Test connection" }))[0]!);
+  await waitFor(() => expect((within(panel).getByLabelText("Tutor model") as HTMLInputElement).disabled).toBe(true));
+  expect((within(panel).getByLabelText("Tutor provider") as HTMLSelectElement).disabled).toBe(true);
+  finish();
+  await within(panel).findByText("Basic request: OK");
+  expect((within(panel).getByLabelText("Tutor model") as HTMLInputElement).disabled).toBe(false);
+});

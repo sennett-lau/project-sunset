@@ -10,6 +10,7 @@ import type {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ButtonHTMLAttributes, type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { useClient } from "../../client-context";
+import { Panel } from "../../components/Panel";
 import { keys } from "../../query-keys";
 
 const ROLE_TEXT: Record<Role, { title: string; hint: string }> = {
@@ -28,7 +29,7 @@ const PRESETS = [
 ];
 
 /** Header button: shows what the tutor runs on and whether everything stays local. */
-export function ModelsButton({ onClick }: { onClick: () => void }) {
+export function ModelsButton({ onClick, expanded }: { onClick: () => void; expanded?: boolean }) {
   const client = useClient();
   const { data } = useQuery({ queryKey: keys.models, queryFn: () => client.modelSettings() });
   const tutor = data?.roles.find((r) => r.role === "tutor");
@@ -36,6 +37,7 @@ export function ModelsButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
+      aria-expanded={expanded}
       className="flex items-center gap-2 rounded-full border border-stone-300 bg-white px-3 py-1 text-sm"
     >
       <span>Models</span>
@@ -51,19 +53,15 @@ export function ModelsButton({ onClick }: { onClick: () => void }) {
 
 export function ModelsPanel({ onClose }: { onClose: () => void }) {
   const client = useClient();
-  const { data, error } = useQuery({ queryKey: keys.models, queryFn: () => client.modelSettings() });
+  const { data, error, isPending, refetch } = useQuery({ queryKey: keys.models, queryFn: () => client.modelSettings() });
   const [editing, setEditing] = useState<ProviderProfile | "new" | null>(null);
 
   return (
-    <aside className="flex w-[28rem] shrink-0 flex-col border-l border-stone-200 bg-stone-50" aria-label="Models">
-      <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
-        <h2 className="font-semibold">Models</h2>
-        <button onClick={onClose} className="text-stone-500" aria-label="Close">
-          ✕
-        </button>
-      </div>
-      <div className="min-h-0 flex-1 space-y-6 overflow-auto p-4 text-sm">
-        {error && <p className="text-red-700">{String(error)}</p>}
+    <Panel title="Models" onClose={onClose}>
+        <p className="panel-intro">Choose who teaches and who takes notes.</p>
+        <p className="text-sm text-stone-600">Add a provider, assign a model to each role, then test its capabilities. Connection tests send small requests to the selected provider.</p>
+        {isPending && <p role="status">Loading model settings…</p>}
+        {error && <p role="alert" className="text-red-700">{String(error)} <button onClick={() => void refetch()}>Retry</button></p>}
         {data && (
           <>
             <p className={data.allLocal ? "text-green-800" : "text-amber-800"}>
@@ -71,6 +69,7 @@ export function ModelsPanel({ onClose }: { onClose: () => void }) {
                 ? "Every role runs on this Mac or your own network."
                 : "At least one role sends your conversation to a cloud service."}
             </p>
+            <p className="privacy-note">Your library is stored on this device. Local providers may run on your network; “local” does not mean offline. Cloud roles receive conversation context. There is no automatic fallback to another provider.</p>
             <section className="space-y-3">
               <h3 className="text-xs font-semibold uppercase text-stone-500">Roles</h3>
               {data.roles.map((r) => (
@@ -95,8 +94,7 @@ export function ModelsPanel({ onClose }: { onClose: () => void }) {
             </section>
           </>
         )}
-      </div>
-    </aside>
+    </Panel>
   );
 }
 
@@ -121,11 +119,11 @@ function RoleEditor({ assignment, providers }: { assignment: RoleAssignment; pro
     staleTime: 60_000,
   });
   const save = useMutation({
-    mutationFn: () => client.setRole(assignment.role, providerId, model),
+    mutationFn: () => client.setRole(assignment.role, providerId, model.trim()),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.models }),
   });
   const test = useMutation({
-    mutationFn: () => client.testConnection(providerId, model),
+    mutationFn: () => client.testConnection(providerId, model.trim()),
     onSuccess: (r) => {
       setReport(r);
       void queryClient.invalidateQueries({ queryKey: keys.models });
@@ -142,6 +140,7 @@ function RoleEditor({ assignment, providers }: { assignment: RoleAssignment; pro
       <div className="flex gap-2">
         <select
           aria-label={`${ROLE_TEXT[assignment.role].title} provider`}
+          disabled={test.isPending || save.isPending}
           value={providerId}
           onChange={(e) => {
             const next = providers.find((p) => p.id === e.target.value);
@@ -159,6 +158,7 @@ function RoleEditor({ assignment, providers }: { assignment: RoleAssignment; pro
         </select>
         <input
           aria-label={`${ROLE_TEXT[assignment.role].title} model`}
+          disabled={test.isPending || save.isPending}
           list={listId}
           value={model}
           onChange={(e) => {
@@ -177,13 +177,13 @@ function RoleEditor({ assignment, providers }: { assignment: RoleAssignment; pro
       )}
       {!changed && <Capabilities caps={assignment.capabilities} />}
       {report && <ProbeNotes report={report} />}
-      {(save.error || test.error) && <p className="text-red-700">{String(save.error ?? test.error)}</p>}
+      {(save.error || test.error) && <p role="alert" className="text-red-700">{String(save.error ?? test.error)}</p>}
       <div className="flex gap-2">
-        <Button disabled={!model.trim() || test.isPending} onClick={() => test.mutate()}>
+        <Button disabled={!model.trim() || test.isPending || save.isPending} onClick={() => test.mutate()}>
           {test.isPending ? "Testing…" : "Test connection"}
         </Button>
-        <Button primary disabled={!changed || !model.trim() || save.isPending} onClick={() => save.mutate()}>
-          Use this model
+        <Button primary disabled={!changed || !model.trim() || save.isPending || test.isPending} onClick={() => save.mutate()}>
+          {save.isPending ? "Saving…" : "Use this model"}
         </Button>
       </div>
     </div>
@@ -217,7 +217,7 @@ function Chip({ label, status }: { label: string; status: CapabilityStatus }) {
 
 function ProbeNotes({ report }: { report: ProbeReport }) {
   return (
-    <div className={`rounded p-2 text-xs ${report.reachable ? "bg-green-50" : "bg-red-50 text-red-800"}`}>
+    <div role="status" className={`rounded p-2 text-xs ${report.reachable ? "bg-green-50" : "bg-red-50 text-red-800"}`}>
       {report.reachable && <Capabilities caps={report.capabilities} />}
       <ul className="mt-1 space-y-0.5">
         {report.notes.map((n, i) => (
@@ -245,7 +245,7 @@ function ProviderRow({ provider: p, onEdit }: { provider: ProviderProfile; onEdi
         <>
           <p className="truncate text-xs text-stone-500">{p.baseUrl}</p>
           <p className="text-xs text-stone-500">{p.hasApiKey ? "API key saved in Keychain" : "No API key"}</p>
-          {remove.error && <p className="text-red-700">{String(remove.error)}</p>}
+          {remove.error && <p role="alert" className="text-red-700">{String(remove.error)}</p>}
           <div className="mt-2 flex gap-2">
             <Button onClick={onEdit}>Edit</Button>
             <Button disabled={remove.isPending} onClick={() => remove.mutate()}>
@@ -268,8 +268,8 @@ function ProviderForm({ provider, onDone }: { provider?: ProviderProfile; onDone
   const save = useMutation({
     mutationFn: () =>
       client.saveProvider(provider?.id ?? null, {
-        name,
-        baseUrl,
+        name: name.trim(),
+        baseUrl: baseUrl.trim(),
         // Empty field on edit keeps the stored key; the key is never read back.
         apiKey: removeKey ? "" : apiKey.trim() ? apiKey.trim() : null,
       }),
@@ -307,6 +307,8 @@ function ProviderForm({ provider, onDone }: { provider?: ProviderProfile; onDone
       </Field>
       <Field label="Base URL (OpenAI-compatible, usually ends in /v1)">
         <input
+          type="url"
+          required
           value={baseUrl}
           onChange={(e) => setBaseUrl(e.target.value)}
           placeholder="http://localhost:11434/v1"
@@ -330,12 +332,12 @@ function ProviderForm({ provider, onDone }: { provider?: ProviderProfile; onDone
         </label>
       )}
       <p className="text-xs text-stone-500">Keys are stored in the macOS Keychain and never shown again.</p>
-      {save.error && <p className="text-red-700">{String(save.error)}</p>}
+      {save.error && <p role="alert" className="text-red-700">{String(save.error)}</p>}
       <div className="flex gap-2">
         <Button primary type="submit" disabled={!name.trim() || !baseUrl.trim() || save.isPending}>
-          Save
+          {save.isPending ? "Saving…" : "Save"}
         </Button>
-        <Button type="button" onClick={onDone}>
+        <Button type="button" disabled={save.isPending} onClick={onDone}>
           Cancel
         </Button>
       </div>

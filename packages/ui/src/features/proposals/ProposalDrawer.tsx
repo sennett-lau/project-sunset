@@ -2,18 +2,22 @@ import type { ConceptId, Proposal } from "@sunset/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ButtonHTMLAttributes } from "react";
 import { useClient } from "../../client-context";
+import { Panel } from "../../components/Panel";
 import { keys } from "../../query-keys";
+import { Markdown } from "../wiki/Markdown";
+import { Visual } from "../visuals/Visual";
 import { describeChange } from "./describe";
 
 /** Quiet badge: counts pending proposals without taking focus (initial spec Part I §6). */
-export function ProposalBadge({ onClick }: { onClick: () => void }) {
+export function ProposalBadge({ onClick, expanded }: { onClick: () => void; expanded?: boolean }) {
   const client = useClient();
-  const { data } = useQuery({ queryKey: keys.pending, queryFn: () => client.pendingProposals() });
+  const { data, error } = useQuery({ queryKey: keys.pending, queryFn: () => client.pendingProposals() });
   const count = data?.length ?? 0;
   const latest = data?.[0]?.summary;
   return (
     <button
       onClick={onClick}
+      aria-expanded={expanded}
       title={latest}
       className="flex items-center gap-2 rounded-full border border-stone-300 bg-white px-3 py-1 text-sm"
     >
@@ -23,7 +27,7 @@ export function ProposalBadge({ onClick }: { onClick: () => void }) {
           count ? "bg-orange-500 text-white" : "bg-stone-200 text-stone-600"
         }`}
       >
-        {count}
+        {error ? "!" : data ? count : "…"}
       </span>
     </button>
   );
@@ -42,22 +46,18 @@ export function ProposalDrawer({
   const history = (recent.data ?? []).filter((p) => p.status !== "awaiting_approval");
 
   return (
-    <aside className="flex w-96 shrink-0 flex-col border-l border-stone-200 bg-stone-50">
-      <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
-        <h2 className="font-semibold">Proposed updates</h2>
-        <button onClick={onClose} className="text-stone-500" aria-label="Close">
-          ✕
-        </button>
-      </div>
-      <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
+    <Panel title="Proposed updates" onClose={onClose}>
+        <p className="panel-intro">Keep what helps you learn.</p>
+        <p className="text-sm text-stone-600">Review the changes below before approving. Saved updates can be undone; private learning notes stay separate from articles.</p>
+        {(pending.isPending || recent.isPending) && <p role="status">Loading updates…</p>}
+        {(pending.error || recent.error) && <p role="alert" className="text-red-700">Could not load updates. <button onClick={() => { void pending.refetch(); void recent.refetch(); }}>Retry</button></p>}
         {pending.data?.length === 0 && <p className="text-sm text-stone-500">Nothing waiting for review.</p>}
         {pending.data?.map((p) => <ProposalCard key={p.id} proposal={p} onOpenConcept={onOpenConcept} />)}
         {history.length > 0 && <h3 className="pt-3 text-xs font-semibold uppercase text-stone-500">History</h3>}
         {history.map((p) => (
           <ProposalCard key={p.id} proposal={p} onOpenConcept={onOpenConcept} />
         ))}
-      </div>
-    </aside>
+    </Panel>
   );
 }
 
@@ -71,11 +71,12 @@ function ProposalCard({ proposal: p, onOpenConcept }: { proposal: Proposal; onOp
           ? client.rejectProposal(p.id)
           : client.undoProposal(p.id),
   });
-  const open = async () => {
+  const open = useMutation({ mutationFn: async () => {
     const slug = p.changes.find((c) => c.op === "upsert_concept")?.slug;
     const match = (await client.listConcepts()).find((c) => c.slug === slug);
     if (match) onOpenConcept(match.id);
-  };
+    else throw new Error("This update has no available article.");
+  } });
 
   return (
     <div className="rounded-lg border border-stone-200 bg-white p-3 text-sm shadow-sm">
@@ -83,6 +84,7 @@ function ProposalCard({ proposal: p, onOpenConcept }: { proposal: Proposal; onOp
         <p className="font-medium">{p.summary}</p>
         <StatusChip status={p.status} />
       </div>
+      <p className="mb-2 text-xs text-stone-500">{p.evidenceTurnIds.length} conversation turns referenced · {new Date(p.createdAt).toLocaleDateString()}</p>
       <ul className="mb-3 space-y-1">
         {p.changes.map((c, i) => {
           const d = describeChange(c);
@@ -90,11 +92,13 @@ function ProposalCard({ proposal: p, onOpenConcept }: { proposal: Proposal; onOp
             <li key={i} className={d.private ? "text-violet-800" : "text-stone-700"}>
               <span className="mr-1.5 text-xs font-semibold uppercase text-stone-400">{d.label}</span>
               {d.text}
+              {c.op === "revise_article" && <details className="mt-2 rounded border border-stone-200 p-2"><summary className="cursor-pointer text-xs">Read proposed article</summary><Markdown source={c.bodyMd} className="prose-sm mt-2" /></details>}
+              {c.op === "add_visual" && <details className="mt-2 rounded border border-stone-200 p-2"><summary className="cursor-pointer text-xs">Preview teaching visual</summary><Visual payload={c.payload} /></details>}
             </li>
           );
         })}
       </ul>
-      {act.error && <p className="mb-2 text-red-700">{String(act.error)}</p>}
+      {(act.error || open.error) && <p role="alert" className="mb-2 text-red-700">{String(act.error ?? open.error)}</p>}
       <div className="flex gap-2">
         {p.status === "awaiting_approval" && (
           <>
@@ -108,7 +112,7 @@ function ProposalCard({ proposal: p, onOpenConcept }: { proposal: Proposal; onOp
         )}
         {p.status === "committed" && (
           <>
-            <Button onClick={() => void open()}>Open</Button>
+            {p.changes.some((c) => c.op === "upsert_concept") && <Button disabled={open.isPending} onClick={() => open.mutate()}>Open</Button>}
             <Button disabled={act.isPending} onClick={() => act.mutate("undo")}>
               Undo
             </Button>
