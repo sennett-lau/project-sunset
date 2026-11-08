@@ -13,6 +13,7 @@ name = "sunset_desktop"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+cpal = "0.15.3"
 serde.workspace = true
 specta.workspace = true
 specta-typescript.workspace = true

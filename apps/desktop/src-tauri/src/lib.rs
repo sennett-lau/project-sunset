@@ -1,8 +1,10 @@
 //! Tauri shell. Keep this thin: build the core, register commands, forward events.
 //! All logic lives in `sunset-core`.
 
+mod audio;
 mod commands;
 mod events;
+mod voice;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -18,6 +20,10 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         // One TypeScript type per Rust type; our types serialize and deserialize the same way.
         .disable_serde_phases()
         .commands(collect_commands![
+            commands::start_recording,
+            commands::stop_recording,
+            commands::cancel_recording,
+            commands::recording_status,
             commands::search_knowledge,
             commands::list_sessions,
             commands::export_public,
@@ -71,6 +77,7 @@ pub fn run() {
             let sunset = tauri::async_runtime::block_on(Sunset::open(config))?;
             events::forward(app.handle().clone(), &sunset);
             app.manage(sunset);
+            app.manage(voice::VoiceState::new().map_err(std::io::Error::other)?);
             Ok(())
         })
         .run(tauri::generate_context!())

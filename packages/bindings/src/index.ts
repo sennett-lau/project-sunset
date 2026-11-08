@@ -7,6 +7,10 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 
 /** Commands */
 export const commands = {
+	startRecording: () => __TAURI_INVOKE<null>("start_recording"),
+	stopRecording: () => __TAURI_INVOKE<string>("stop_recording"),
+	cancelRecording: () => __TAURI_INVOKE<null>("cancel_recording"),
+	recordingStatus: () => __TAURI_INVOKE<CaptureStatus>("recording_status"),
 	searchKnowledge: (query: string, limit: number) => __TAURI_INVOKE<ConceptSummary[]>("search_knowledge", { query, limit }),
 	listSessions: (limit: number) => __TAURI_INVOKE<Session[]>("list_sessions", { limit }),
 	exportPublic: () => __TAURI_INVOKE<PublicExportFile[]>("export_public"),
@@ -83,6 +87,14 @@ export type ArtifactId = string;
 export type CapabilityStatus = "supported" | "unsupported" | 
 /**  Not probed yet. The app uses the safest path until "Test connection" runs. */
 "needs_test";
+
+export type CaptureStatus = {
+	recording: boolean,
+	elapsedMs: number,
+	/**  Capture reached the limit; `stop` can still retrieve the recording. */
+	autoStopped: boolean,
+	error: string | null,
+};
 
 export type CommitId = string;
 

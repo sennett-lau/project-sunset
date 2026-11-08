@@ -214,6 +214,10 @@ export function createFakeClient(): SunsetClient {
       if (r) Object.assign(r, { providerId, model, capabilities: untested });
       else roles.push({ role, providerId, model, capabilities: untested });
     },
+    async startRecording() {},
+    async stopRecording() { return "What is a VAE?"; },
+    async cancelRecording() {},
+    async recordingStatus() { return { recording: false, elapsedMs: 0, autoStopped: false, error: null }; },
     onEvent(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

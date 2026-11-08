@@ -3,6 +3,7 @@
 
 import type {
   AppEvent,
+  CaptureStatus,
   Session,
   PublicExportFile,
   VaultStatus,
@@ -29,6 +30,11 @@ import type {
 export type * from "@sunset/bindings";
 
 export interface SunsetClient {
+  /** Native capture, max two minutes. Transcripts are returned for review, never auto-sent. */
+  startRecording(): Promise<void>;
+  stopRecording(): Promise<string>;
+  cancelRecording(): Promise<void>;
+  recordingStatus(): Promise<CaptureStatus>;
   /** Literal lexical search of approved public knowledge; not semantic search. */
   searchKnowledge(query: string, limit: number): Promise<ConceptSummary[]>;
   listSessions(limit: number): Promise<Session[]>;

@@ -3,6 +3,10 @@ import { commands, events } from "@sunset/bindings";
 import type { SunsetClient } from "@sunset/client";
 
 export const tauriClient: SunsetClient = {
+  startRecording: async () => { await commands.startRecording(); },
+  stopRecording: commands.stopRecording,
+  cancelRecording: async () => { await commands.cancelRecording(); },
+  recordingStatus: commands.recordingStatus,
   searchKnowledge: commands.searchKnowledge,
   listSessions: commands.listSessions,
   exportPublicToFolder: commands.exportPublicToFolder,

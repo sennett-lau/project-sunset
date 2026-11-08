@@ -16,6 +16,35 @@ fn err(e: sunset_core::CoreError) -> String {
 
 #[tauri::command]
 #[specta::specta]
+pub async fn start_recording(
+    sunset: State<'_, Sunset>,
+    voice: State<'_, crate::voice::VoiceState>,
+) -> CmdResult<()> {
+    voice.start(&sunset).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn stop_recording(voice: State<'_, crate::voice::VoiceState>) -> CmdResult<String> {
+    voice.stop().await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn cancel_recording(voice: State<'_, crate::voice::VoiceState>) -> CmdResult<()> {
+    voice.cancel().await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn recording_status(
+    voice: State<'_, crate::voice::VoiceState>,
+) -> CmdResult<crate::audio::CaptureStatus> {
+    voice.status().await
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn send_message(
     sunset: State<'_, Sunset>,
     session_id: Option<SessionId>,
