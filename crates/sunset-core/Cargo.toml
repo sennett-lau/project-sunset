@@ -7,9 +7,18 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 sunset-domain.workspace = true
 sunset-providers.workspace = true
 sunset-store.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true
