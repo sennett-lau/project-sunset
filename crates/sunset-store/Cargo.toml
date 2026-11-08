@@ -1,0 +1,13 @@
+[package]
+name = "sunset-store"
+description = "SQLite persistence, search and the Markdown vault mirror."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+sunset-domain.workspace = true
+
+[lints]
+workspace = true

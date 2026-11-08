@@ -1,0 +1,15 @@
+[package]
+name = "sunset-core"
+description = "All Sunset business logic. Must not depend on Tauri, axum or any UI."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+sunset-domain.workspace = true
+sunset-providers.workspace = true
+sunset-store.workspace = true
+
+[lints]
+workspace = true

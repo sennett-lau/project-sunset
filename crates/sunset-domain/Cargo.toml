@@ -1,0 +1,13 @@
+[package]
+name = "sunset-domain"
+description = "Plain data types shared by every Sunset crate. No I/O."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+
+[lints]
+workspace = true

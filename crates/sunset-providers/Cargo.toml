@@ -1,0 +1,12 @@
+[package]
+name = "sunset-providers"
+description = "AI provider traits and adapters. Knows nothing about concepts or articles."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true
