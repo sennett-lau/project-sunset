@@ -51,3 +51,20 @@ pub struct SendMessageResult {
     pub user_turn: Turn,
     pub tutor_turn_id: TurnId,
 }
+
+/// Public Markdown only. Never includes private observations, transcripts or evidence turn IDs.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicExportFile {
+    pub filename: String,
+    pub markdown: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultStatus {
+    pub path: String,
+    /// User-edited or unmanaged paths left untouched.
+    pub conflicts: Vec<String>,
+    pub error: Option<String>,
+}

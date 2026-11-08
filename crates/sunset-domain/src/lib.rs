@@ -36,7 +36,10 @@ pub use provider::{
 pub use relation::{Relation, RelationKind};
 pub use session::{Session, Speaker, Turn};
 pub use settings::SaveMode;
-pub use views::{ConceptPage, ConceptSummary, GraphView, RelationView, SendMessageResult};
+pub use views::{
+    ConceptPage, ConceptSummary, GraphView, PublicExportFile, RelationView, SendMessageResult,
+    VaultStatus,
+};
 pub use visual::{
     DataSeries, EquationStep, ExplorerPreset, FlowEdge, FlowNode, PlotPoint, PlotType, SliderParam,
     VisualArtifact, VisualPayload,

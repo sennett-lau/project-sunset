@@ -84,3 +84,37 @@ fn turn_from_row(row: &SqliteRow) -> Result<Turn> {
         created_at: row.try_get("created_at")?,
     })
 }
+
+pub async fn list(conn: &mut SqliteConnection, user: UserId, limit: u32) -> Result<Vec<Session>> {
+    sqlx::query(
+        "SELECT * FROM sessions WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ?",
+    )
+    .bind(user.to_string())
+    .bind(limit.min(100))
+    .fetch_all(conn)
+    .await?
+    .iter()
+    .map(|r| {
+        Ok(Session {
+            id: codec::id(r, "id")?,
+            created_at: r.try_get("created_at")?,
+        })
+    })
+    .collect()
+}
+
+/// Bounded newest history for model input, returned chronologically.
+pub async fn recent_turns(
+    conn: &mut SqliteConnection,
+    session_id: SessionId,
+    limit: u32,
+) -> Result<Vec<Turn>> {
+    let rows = sqlx::query(
+        "SELECT * FROM turns WHERE session_id = ? ORDER BY created_at DESC, id DESC LIMIT ?",
+    )
+    .bind(session_id.to_string())
+    .bind(limit.min(100))
+    .fetch_all(conn)
+    .await?;
+    rows.iter().rev().map(turn_from_row).collect()
+}
