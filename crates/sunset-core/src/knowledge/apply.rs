@@ -11,6 +11,7 @@ use sunset_store::repo::{commits, knowledge as kn, proposals};
 use crate::{CoreError, Result, Sunset};
 
 pub async fn approve(app: &Sunset, id: ProposalId) -> Result<Proposal> {
+    let _guard = app.inner.knowledge_lock.lock().await;
     let inner = &app.inner;
     let mut tx = inner.store.begin().await?;
     let proposal = load(&mut tx, id).await?;
@@ -28,7 +29,9 @@ pub async fn approve(app: &Sunset, id: ProposalId) -> Result<Proposal> {
     }
     apply_changes(app, &mut tx, &proposal, commit.id).await?;
     let updated = load(&mut tx, id).await?;
+    sunset_store::search::refresh(&mut tx).await?;
     tx.commit().await?;
+    app.sync_vault_after_commit().await;
     inner.bus.emit(AppEvent::ProposalUpdated {
         proposal: updated.clone(),
     });
@@ -39,6 +42,7 @@ pub async fn approve(app: &Sunset, id: ProposalId) -> Result<Proposal> {
 }
 
 pub async fn reject(app: &Sunset, id: ProposalId) -> Result<Proposal> {
+    let _guard = app.inner.knowledge_lock.lock().await;
     let inner = &app.inner;
     let mut tx = inner.store.begin().await?;
     let proposal = load(&mut tx, id).await?;
@@ -62,6 +66,7 @@ pub async fn reject(app: &Sunset, id: ProposalId) -> Result<Proposal> {
 }
 
 pub async fn undo(app: &Sunset, id: ProposalId) -> Result<Proposal> {
+    let _guard = app.inner.knowledge_lock.lock().await;
     let inner = &app.inner;
     let mut tx = inner.store.begin().await?;
     let proposal = load(&mut tx, id).await?;
@@ -82,7 +87,9 @@ pub async fn undo(app: &Sunset, id: ProposalId) -> Result<Proposal> {
     }
     kn::retract_commit(&mut tx, original, undo.id).await?;
     let updated = load(&mut tx, id).await?;
+    sunset_store::search::refresh(&mut tx).await?;
     tx.commit().await?;
+    app.sync_vault_after_commit().await;
     inner.bus.emit(AppEvent::ProposalUpdated {
         proposal: updated.clone(),
     });

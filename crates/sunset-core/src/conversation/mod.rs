@@ -2,14 +2,11 @@
 
 use futures::StreamExt;
 use sunset_domain::{AppEvent, Role, SendMessageResult, SessionId, Speaker, Turn, TurnId};
-use sunset_providers::{ChatMessage, ChatRequest};
+mod context;
 use sunset_store::repo::sessions;
 
 use crate::{CoreError, Result, Sunset, jobs, models};
 
-const TUTOR_PROMPT: &str = include_str!("../prompts/tutor.md");
-/// How many earlier turns the tutor sees. Retrieval-based context arrives in Phase 2.
-const HISTORY_TURNS: usize = 20;
 const MAX_MESSAGE_CHARS: usize = 20_000;
 
 pub(crate) async fn send_message(
@@ -35,7 +32,7 @@ pub(crate) async fn send_message(
     };
     let user_turn =
         sessions::insert_turn(&mut conn, TurnId::new(), session_id, Speaker::User, text).await?;
-    let history = sessions::list_turns(&mut conn, session_id).await?;
+    let history = sessions::recent_turns(&mut conn, session_id, 20).await?;
     drop(conn);
     inner.bus.emit(AppEvent::TurnFinalized {
         turn: user_turn.clone(),
@@ -65,7 +62,7 @@ pub(crate) async fn send_message(
 /// Stream the answer, store it, then queue curation.
 async fn answer(app: &Sunset, history: &[Turn], user_turn: &Turn, turn_id: TurnId) -> Result<()> {
     let inner = &app.inner;
-    let request = tutor_request(history);
+    let request = context::request(app, history, &user_turn.text).await?;
     let tutor = models::model_for(app, Role::Tutor).await?;
     let mut stream = tutor.stream(request).await?;
     let mut full = String::new();
@@ -92,17 +89,4 @@ async fn answer(app: &Sunset, history: &[Turn], user_turn: &Turn, turn_id: TurnI
         turn: tutor_turn.clone(),
     });
     jobs::queue_curation(app, user_turn, &tutor_turn).await
-}
-
-fn tutor_request(history: &[Turn]) -> ChatRequest {
-    let start = history.len().saturating_sub(HISTORY_TURNS);
-    let mut messages = vec![ChatMessage::system(TUTOR_PROMPT)];
-    messages.extend(history[start..].iter().map(|t| match t.speaker {
-        Speaker::User => ChatMessage::user(&t.text),
-        Speaker::Tutor => ChatMessage::assistant(&t.text),
-    }));
-    ChatRequest {
-        messages,
-        ..Default::default()
-    }
 }

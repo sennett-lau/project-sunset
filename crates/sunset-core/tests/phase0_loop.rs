@@ -94,6 +94,8 @@ async fn ask_stream_propose_approve_undo() {
         "nothing saved before approval"
     );
 
+    assert!(app.search_knowledge("VAE", 10).await.unwrap().is_empty());
+
     // Approve: the wiki and graph change.
     let approved = app.approve_proposal(proposal.id).await.unwrap();
     assert_eq!(approved.status, ProposalStatus::Committed);
@@ -110,6 +112,19 @@ async fn ask_stream_propose_approve_undo() {
     assert_eq!(page.article.as_ref().unwrap().version, 1);
     let kinds: Vec<RelationKind> = page.outgoing.iter().map(|r| r.relation.kind).collect();
     assert_eq!(kinds, [RelationKind::IsA, RelationKind::Uses]);
+    assert!(!app.search_knowledge("VAE", 10).await.unwrap().is_empty());
+    let exported = app.export_public().await.unwrap();
+    assert!(
+        exported
+            .iter()
+            .all(|f| !f.markdown.contains("What is a VAE?"))
+    );
+    let vault_files: Vec<_> = exported
+        .iter()
+        .map(|f| app.data_dir().join("vault").join(&f.filename))
+        .collect();
+    assert!(vault_files.iter().all(|p| p.exists()));
+    assert!(app.vault_status().error.is_none());
     assert_eq!(page.overlay.len(), 1);
     assert_eq!(page.overlay[0].kind, ObservationKind::Question);
     assert!(page.overlay[0].note.contains("What is a VAE?"));
@@ -135,6 +150,9 @@ async fn ask_stream_propose_approve_undo() {
     assert_eq!(undone.status, ProposalStatus::Undone);
     assert!(app.concepts().await.unwrap().is_empty());
     assert!(app.concept_page(vae.id).await.is_err());
+    assert!(app.search_knowledge("VAE", 10).await.unwrap().is_empty());
+    assert!(app.export_public().await.unwrap().is_empty());
+    assert!(vault_files.iter().all(|p| !p.exists()));
     assert_eq!(app.graph().await.unwrap().edges.len(), 0);
 
     // Ask again and reject: nothing is saved.
@@ -198,6 +216,7 @@ async fn small_talk_proposes_nothing_and_proposals_survive_restart() {
         std::slice::from_ref(&proposal)
     );
     assert_eq!(app.turns(hello.session_id).await.unwrap().len(), 4);
+    assert_eq!(app.list_sessions(10).await.unwrap()[0].id, hello.session_id);
     app.close().await;
 
     let reopened = open(dir.path()).await;

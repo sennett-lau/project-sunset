@@ -35,6 +35,9 @@ pub struct Sunset {
 }
 
 pub(crate) struct Inner {
+    pub knowledge_lock: tokio::sync::Mutex<()>,
+    pub vault_lock: tokio::sync::Mutex<()>,
+    pub vault_status: Mutex<sunset_domain::VaultStatus>,
     pub identity: AppIdentity,
     pub data_dir: PathBuf,
     pub store: Store,
@@ -53,8 +56,16 @@ impl Sunset {
         let (user, _) = users::local_user(&mut *store.conn().await?).await?;
         let sunset = Self {
             inner: Arc::new(Inner {
+                knowledge_lock: tokio::sync::Mutex::new(()),
+                vault_lock: tokio::sync::Mutex::new(()),
+                vault_status: Mutex::new(sunset_domain::VaultStatus {
+                    path: config.data_dir.join("vault").to_string_lossy().into(),
+                    conflicts: vec![],
+                    error: None,
+                }),
                 identity: config.identity,
-                data_dir: config.data_dir,
+                data_dir: std::fs::canonicalize(&config.data_dir)
+                    .map_err(sunset_store::StoreError::from)?,
                 store,
                 user,
                 bus: EventBus::new(),
@@ -65,8 +76,99 @@ impl Sunset {
             }),
         };
         models::ensure_defaults(&sunset).await?;
+        let mut tx = sunset.inner.store.begin().await?;
+        sunset_store::search::refresh(&mut tx).await?;
+        tx.commit().await?;
+        sunset.sync_vault().await;
         jobs::resume(&sunset).await?;
         Ok(sunset)
+    }
+
+    pub async fn search_knowledge(&self, query: &str, limit: u32) -> Result<Vec<ConceptSummary>> {
+        Ok(sunset_store::search::search(
+            &mut *self.inner.store.conn().await?,
+            self.inner.user,
+            query,
+            limit,
+        )
+        .await?)
+    }
+
+    pub async fn list_sessions(&self, limit: u32) -> Result<Vec<sunset_domain::Session>> {
+        Ok(sessions::list(&mut *self.inner.store.conn().await?, self.inner.user, limit).await?)
+    }
+
+    /// Render only approved public knowledge, directly from SQLite. No mirror files are read.
+    pub async fn export_public(&self) -> Result<Vec<sunset_domain::PublicExportFile>> {
+        let _guard = self.inner.knowledge_lock.lock().await;
+        let mut files = vec![];
+        for c in self.concepts().await? {
+            files.push(sunset_store::vault::public_file(
+                &self.concept_page(c.id).await?,
+            ));
+        }
+        files.sort_by(|a, b| a.filename.cmp(&b.filename));
+        Ok(files)
+    }
+
+    /// A fresh portable public snapshot under the app-owned exports directory.
+    pub async fn export_public_to_folder(&self) -> Result<String> {
+        let files = self.export_public().await?;
+        let path =
+            sunset_store::vault::export_snapshot(&self.inner.data_dir.join("exports"), &files)?;
+        Ok(path.to_string_lossy().into_owned())
+    }
+
+    pub fn vault_status(&self) -> sunset_domain::VaultStatus {
+        self.inner
+            .vault_status
+            .lock()
+            .expect("vault status lock")
+            .clone()
+    }
+
+    /// Retryable derived output. A mirror failure never misreports a committed DB change as failed.
+    pub async fn sync_vault(&self) -> sunset_domain::VaultStatus {
+        let _guard = self.inner.knowledge_lock.lock().await;
+        self.sync_vault_after_commit().await
+    }
+
+    pub(crate) async fn sync_vault_after_commit(&self) -> sunset_domain::VaultStatus {
+        let _lock = self.inner.vault_lock.lock().await;
+        let result: Result<Vec<String>> = async {
+            let mut desired = std::collections::BTreeMap::new();
+            for c in self.concepts().await? {
+                let page = self.concept_page(c.id).await?;
+                let file = sunset_store::vault::public_file(&page);
+                if !page.overlay.is_empty() {
+                    desired.insert(
+                        format!(".private_overlay/{}", file.filename),
+                        format!(
+                            "# Private learning observations\n\n```json\n{}\n```\n",
+                            serde_json::to_string_pretty(&page.overlay)
+                                .map_err(sunset_store::StoreError::from)?
+                        ),
+                    );
+                }
+                desired.insert(file.filename, file.markdown);
+            }
+            Ok(sunset_store::vault::sync(
+                &mut *self.inner.store.conn().await?,
+                &self.inner.data_dir.join("vault"),
+                &desired,
+            )
+            .await?)
+        }
+        .await;
+        let mut status = self.inner.vault_status.lock().expect("vault status lock");
+        match result {
+            Ok(conflicts) => {
+                status.conflicts = conflicts;
+                status.error = None;
+            }
+            Err(e) => status.error = Some(e.to_string()),
+        }
+        status.clone()
     }
 
     pub fn identity(&self) -> &AppIdentity {
