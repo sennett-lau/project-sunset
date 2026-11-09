@@ -4,10 +4,11 @@ import type { ReactNode } from "react";
 const relations: RelationKind[] = ["IS_A", "PART_OF", "USES", "DEPENDS_ON", "EXPLAINS", "RELATED_TO", "CONTRASTS_WITH", "APPEARS_IN_SOURCE"];
 
 /** Edit content without exposing or replacing core-owned evidence and lifecycle fields. */
-export function ProposalEditor({ draft, onChange, disabled }: {
+export function ProposalEditor({ draft, onChange, disabled, articleOnly = false }: {
   draft: ProposalEdit;
   onChange: (draft: ProposalEdit) => void;
   disabled: boolean;
+  articleOnly?: boolean;
 }) {
   const changeAt = (index: number, change: ProposedChange) => onChange({ ...draft, changes: draft.changes.map((c, i) => i === index ? change : c) });
   return <fieldset disabled={disabled} className="mb-3 space-y-4 disabled:opacity-60">
@@ -16,14 +17,14 @@ export function ProposalEditor({ draft, onChange, disabled }: {
     <Field label="Update summary" value={draft.summary} set={(summary) => onChange({ ...draft, summary })} />
     {draft.changes.map((c, index) => <section key={index} className="space-y-2 rounded border border-stone-200 p-3" aria-label={`Change ${index + 1}`}>
       <div className="flex items-center justify-between gap-2"><p className="font-medium">{index + 1}. {c.op.replaceAll("_", " ")}</p>
-        <button type="button" className="text-xs text-red-700 underline" onClick={() => onChange({ ...draft, changes: draft.changes.filter((_, i) => i !== index) })}>Remove change {index + 1}</button>
+        {!articleOnly && <button type="button" className="text-xs text-red-700 underline" onClick={() => onChange({ ...draft, changes: draft.changes.filter((_, i) => i !== index) })}>Remove change {index + 1}</button>}
       </div>
       {c.op === "upsert_concept" && <>
         <Field label="Concept address" value={c.slug} set={(slug) => changeAt(index, { ...c, slug })} />
         <Field label="Title" value={c.title} set={(title) => changeAt(index, { ...c, title })} />
         <Field label="Aliases (one per line)" value={c.aliases.join("\n")} multiline set={(value) => changeAt(index, { ...c, aliases: value.split("\n") })} />
       </>}
-      {"concept" in c && <Field label="Concept address" value={c.concept} set={(concept) => changeAt(index, { ...c, concept })} />}
+      {"concept" in c && <Field disabled={articleOnly} label="Concept address" value={c.concept} set={(concept) => changeAt(index, { ...c, concept })} />}
       {c.op === "revise_article" && <>
         <Field label="Article summary" value={c.summary} set={(summary) => changeAt(index, { ...c, summary })} />
         <Field label="Article text (Markdown)" value={c.bodyMd} multiline rows={12} set={(bodyMd) => changeAt(index, { ...c, bodyMd })} />
@@ -56,9 +57,9 @@ export function ProposalEditor({ draft, onChange, disabled }: {
 function Label({ name, children }: { name: string; children: ReactNode }) {
   return <label className="block space-y-1 text-xs"><span className="font-medium text-stone-600">{name}</span>{children}</label>;
 }
-function Field({ label, value, set, multiline, rows = 3 }: { label: string; value: string; set: (value: string) => void; multiline?: boolean; rows?: number }) {
+function Field({ label, value, set, multiline, rows = 3, disabled = false }: { label: string; value: string; set: (value: string) => void; multiline?: boolean; rows?: number; disabled?: boolean }) {
   const className = "block w-full rounded border border-stone-300 bg-white px-2 py-1.5 text-sm";
   return <Label name={label}>{multiline
     ? <textarea className={className} value={value} rows={rows} onChange={(e) => set(e.target.value)} />
-    : <input className={className} value={value} onChange={(e) => set(e.target.value)} />}</Label>;
+    : <input disabled={disabled} className={className} value={value} onChange={(e) => set(e.target.value)} />}</Label>;
 }

@@ -117,7 +117,7 @@ function ProposalCard({ proposal: p, onOpenConcept }: { proposal: Proposal; onOp
       <p className="mb-2 text-xs text-stone-500">{p.articleBase ? "Your article edit" : `${p.evidenceTurnIds.length} conversation turns referenced`} · {new Date(p.createdAt).toLocaleDateString()}</p>
       {draft && <>
         <p className="mb-2 text-xs text-stone-500">Your draft is kept while you navigate this workspace. Save edits before quitting the app.</p>
-        <ProposalEditor draft={draft} onChange={setDraft} disabled={save.isPending} />
+        <ProposalEditor articleOnly={!!p.articleBase} draft={draft} onChange={setDraft} disabled={save.isPending} />
         {stale && <p role="alert" className="mb-2 text-amber-800">This proposal changed while you were editing. Your draft is still shown. Copy any text you want to keep, then cancel editing to review the latest version.</p>}
         {save.error && <p role="alert" className="mb-2 text-red-700">Could not save edits: {String(save.error)} Your draft is kept here.</p>}
         <div className="mb-3 flex gap-2">

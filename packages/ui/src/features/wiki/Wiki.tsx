@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useClient } from "../../client-context";
 import { keys } from "../../query-keys";
 import { Visual } from "../visuals/Visual";
+import { ArticleEditor, useArticleDraft } from "./ArticleEditor";
 import { Markdown } from "./Markdown";
 
 export function Wiki({ selected, onSelect }: { selected: ConceptId | null; onSelect: (id: ConceptId) => void }) {
@@ -50,7 +51,7 @@ export function Wiki({ selected, onSelect }: { selected: ConceptId | null; onSel
         ))}
       </ul>{waiting && <p role="status">Searching knowledge…</p>}{searching && !waiting && search.error && <p role="alert">Search failed. <button onClick={() => void search.refetch()}>Retry search</button></p>}{!waiting && !search.error && filtered.length === 0 && <p role="status" className="text-sm">No matching articles.</p>}</div>
       <div className="min-w-0 flex-1 overflow-auto p-6">
-        {current && <ConceptView id={current.id} onSelect={onSelect} />}
+        {current && <ConceptView key={current.id} id={current.id} onSelect={onSelect} />}
       </div>
     </div>
   );
@@ -59,6 +60,8 @@ export function Wiki({ selected, onSelect }: { selected: ConceptId | null; onSel
 function ConceptView({ id, onSelect }: { id: ConceptId; onSelect: (id: ConceptId) => void }) {
   const client = useClient();
   const page = useQuery({ queryKey: keys.concept(id), queryFn: () => client.conceptPage(id) });
+  const editing = useArticleDraft(id);
+  const [saved, setSaved] = useState(false);
   const concepts = useQuery({ queryKey: keys.concepts, queryFn: () => client.listConcepts() });
   if (page.isPending) return <p role="status">Loading article…</p>;
   if (page.error || !page.data) return <p role="alert">Could not load this article. <button onClick={() => void page.refetch()}>Retry</button></p>;
@@ -76,6 +79,9 @@ function ConceptView({ id, onSelect }: { id: ConceptId; onSelect: (id: ConceptId
         {article && <p className="mt-3 text-lg text-stone-700">{article.summary}</p>}
       </header>
 
+      {article && !editing.draft && <button className="text-sm text-orange-800 underline" onClick={() => { setSaved(false); editing.begin(article); }}>Edit article</button>}
+      {saved && <p role="status" className="text-sm text-green-800">Article edit proposed. Open Proposed updates to review and approve it.</p>}
+      {article && editing.draft && <ArticleEditor id={id} article={article} draft={editing.draft} setDraft={editing.setDraft} onSaved={() => setSaved(true)} />}
       {!article && <p className="text-sm text-stone-500">A concept to build on. No article has been saved yet.</p>}
       {article?.bodyMd && <Markdown source={article.bodyMd} onLink={openSlug} />}
 
