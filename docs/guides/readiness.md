@@ -6,12 +6,13 @@ proposal editing are implemented. TTS/realtime voice, semantic retrieval and sou
 
 ## Verified behavior
 
-- `pnpm check` passed: 32 UI tests and 56 Rust tests, type checking, formatting, generated
+- `pnpm check` passed: 36 UI tests and 57 Rust tests, type checking, formatting, generated
   bindings and clippy. Post-change Rust tests cover the demo loop,
   real HTTP adapter against fixtures, capability probing, validation, approval/auto-save,
   rejection/undo, restart, alias deduplication, retrieval, mirror recovery and public export.
   New checks cover editing/approval races, immutable proposal history, audio resampling/limits,
   fixed speech destinations, cancellation, stale transcription results and draft retention.
+  Saved-article revision tests cover Auto-mode review, stale writes, restart, export and undo.
 - The opt-in live test passed against the existing **Qwen3.5 4B** llama.cpp server on sennett-pc:
   capability probes → streamed tutor → real curator proposal → approval → reopen library → undo.
   Both English and Chinese/Cantonese-prompt runs passed. The latter also checked lexical search,
@@ -50,7 +51,7 @@ proposal editing are implemented. TTS/realtime voice, semantic retrieval and sou
 | FR-06: separate personal annotations | Private observations shown separately and excluded from public export |
 | FR-07: auto-save or review first | Both implemented |
 | FR-08: quiet capture | Proposal badge and non-modal review implemented; active delivery queue deferred |
-| FR-09: reject, edit and undo | Pending proposals can be edited with version history, rejected or approved/undone; direct saved-article editing remains missing |
+| FR-09: reject, edit and undo | Pending proposals can be edited with version history, rejected or approved/undone; saved articles can be revised through reviewed, version-checked proposals |
 | FR-10: conversation provenance | Evidence turn IDs persisted; navigable citation/provenance UI remains incomplete |
 | FR-11: onboarding and editable context | Basic first-run/demo guidance; editable learner profile/preferences still missing |
 | FR-12: English and Cantonese | Synthetic ASR-to-knowledge loops passed in both languages; Cantonese style/accuracy varies with the tested 4B model; no physical spoken-conversation benchmark |
@@ -79,7 +80,9 @@ also still deferred. The core/client separation remains intact for those additio
 5. Reopen an earlier conversation. Restart the app and check that approved knowledge persists.
 6. In **Library**, check mirror status and export public Markdown. Use the **export snapshot**
    for sharing; the full vault contains a private `.private_overlay` folder.
-7. Add the speech endpoint on port 8180 under **Models → Speech recognition**, model `qwen3-asr`.
+7. In Wiki, choose **Edit article**, change the summary or Markdown and preview it. Choose
+   **Review article edit**, then approve it under Proposed updates. Check Open and Undo.
+8. Add the speech endpoint on port 8180 under **Models → Speech recognition**, model `qwen3-asr`.
    Record a question, stop, correct the transcript in the draft and Send. Test microphone permission,
    Cancel, retry after a service error, and recording near the two-minute limit. Audio is not saved.
 
@@ -99,8 +102,11 @@ files. Exported snapshots are independent copies and are not changed by a later 
   plumbing test does not establish teaching or language quality.
   Updated tutor instructions encourage concise Cantonese and clarification of ambiguous inputs;
   a later sample was more conversational but still exceeded the requested length and mixed scripts.
-- Proposal editing covers text and selected visual labels; saved-article editing and full visual
-  structure editing are not exposed. Closing the editor discards its unsaved draft.
+- Proposal editing covers text and selected visual labels; full visual structure editing is not exposed.
+  Unsaved proposal drafts survive inspector navigation in memory; save them before quitting.
+- Saved-article edits create pending proposals even in Auto mode. Submission and approval check the
+  original article revision to prevent overwriting newer work. Approval updates exports; undo restores
+  the previous article. Manual edits retain their article source without inventing conversation turns.
 - An unsigned development binary may prompt for Keychain access when using stored API keys.
 - No live cloud model, hosted voice, TTS, microphone permissions or release signing/notarization
   was validated in this increment.

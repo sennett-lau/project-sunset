@@ -61,6 +61,8 @@ See `docs/guides/readiness.md` for the explicit feature audit and physical-devic
   and unmanaged mirror files and surface conflicts. Export snapshots always use a new folder.
 - Pending proposal edits append immutable snapshots. Approve/reject must carry the revision
   the user reviewed; stale actions fail. Session and evidence turn IDs cannot be edited.
+  Manual saved-article edits always await approval, even in Auto mode; their immutable base
+  revision must still be current at submission and approval. Never invent conversation evidence.
 - Microphone capture starts only on the user's Record action, on a dedicated CPAL worker.
   Keep audio bounded and in memory, pin the speech destination before capture, and discard
   recording/transcription on cancel. Recognized text goes to a draft, never automatically to chat.

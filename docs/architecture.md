@@ -530,8 +530,12 @@ source found or a correction offer, `[P2]` text, `[P3]` voice).
   the original model proposal. Editing is validated transactionally; approval and rejection require
   the reviewed revision. Evidence/session metadata stays fixed. The UI edits text fields and
   selected visual labels, removes individual changes, and shows version history.
-- Approved article editing and full visual structure editing remain separate work. Saving a proposal
-  edit does not approve it; approval, vault synchronization, public export and undo use its edited content.
+- Saved articles can be edited through pending proposals, including in Auto mode. An immutable
+  article base revision is checked at submission, proposal editing and approval. Manual edits retain
+  their source session association and have no fabricated conversation evidence. Approval, mirror
+  synchronization, public export and undo use the edited content. Full visual structure editing remains
+  separate work. Unsaved proposal drafts survive inspector navigation in memory until saved/cancelled
+  or the app exits.
 - Synthetic English and Cantonese audio passed through the actual PC ASR and LLM services into
   proposals, approval, retrieval, export, restart and undo. Audio capture processing is tested with
   synthetic samples; hardware capture and native visual QA remain unverified.
