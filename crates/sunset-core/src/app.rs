@@ -207,6 +207,23 @@ impl Sunset {
         Ok(sessions::list_turns(&mut *self.inner.store.conn().await?, session_id).await?)
     }
 
+    pub async fn propose_article_edit(
+        &self,
+        concept_id: ConceptId,
+        expected_revision_id: sunset_domain::RevisionId,
+        summary: String,
+        body_md: String,
+    ) -> Result<Proposal> {
+        knowledge::apply::propose_article_edit(
+            self,
+            concept_id,
+            expected_revision_id,
+            summary,
+            body_md,
+        )
+        .await
+    }
+
     // ---- proposals --------------------------------------------------------------------------
 
     pub async fn pending_proposals(&self) -> Result<Vec<Proposal>> {

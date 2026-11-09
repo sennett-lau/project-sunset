@@ -1,6 +1,7 @@
 // In-memory SunsetClient for UI tests. Mimics the Phase 0 mock loop of sunset-core.
 import type {
   AppEvent,
+  ArticleRevision,
   Concept,
   ConceptPage,
   ModelCapabilities,
@@ -23,6 +24,8 @@ export function createFakeClient(): SunsetClient {
   const listeners = new Set<(e: AppEvent) => void>();
   const emit = (e: AppEvent) => listeners.forEach((l) => l(e));
   const proposals: Proposal[] = [];
+  const articles = new Map<string, ArticleRevision>();
+  const previousArticles = new Map<string, ArticleRevision>();
   const versions = new Map<ProposalId, ProposalVersion[]>();
   const sessions: Session[] = [];
   const turns: Turn[] = [];
@@ -83,6 +86,7 @@ export function createFakeClient(): SunsetClient {
             { op: "add_observation", concept: "variational-autoencoder", kind: "question", source: "observed", note: `Asked: "${text}"` },
           ],
           revision: 0,
+          articleBase: null,
           status: "awaiting_approval",
           commitId: null,
           createdAt: now(),
@@ -95,6 +99,22 @@ export function createFakeClient(): SunsetClient {
     },
     async listTurns(sessionId) {
       return turns.filter((t) => t.sessionId === sessionId).map((t) => ({ ...t }));
+    },
+    async proposeArticleEdit(conceptId, expectedRevisionId, summary, bodyMd) {
+      const page = await this.conceptPage(conceptId);
+      if (page.article?.id !== expectedRevisionId) throw new Error("Article changed; reopen it before editing.");
+      const source = proposals.find((p) => p.commitId === page.article?.commitId);
+      if (!source) throw new Error("source proposal not found");
+      const proposal: Proposal = {
+        id: id(), sessionId: source.sessionId, evidenceTurnIds: [], summary: `Edit article: ${page.concept.title}`,
+        articleBase: { conceptId, revisionId: expectedRevisionId }, revision: 0,
+        changes: [{ op: "revise_article", concept: page.concept.slug, summary, bodyMd }],
+        status: "awaiting_approval", commitId: null, createdAt: now(),
+      };
+      proposals.unshift(proposal);
+      versions.set(proposal.id, [{ revision: 0, summary: proposal.summary, changes: structuredClone(proposal.changes), createdAt: proposal.createdAt }]);
+      emit({ type: "proposal_created", proposal: { ...proposal } });
+      return proposal;
     },
     async pendingProposals() {
       return proposals.filter((p) => p.status === "awaiting_approval").map((p) => ({ ...p }));
@@ -114,8 +134,14 @@ export function createFakeClient(): SunsetClient {
     async approveProposal(pid, revision) {
       const p = find(pid);
       if (p.status !== "awaiting_approval" || p.revision !== revision) throw new Error("Proposal changed; review the latest version.");
-      concepts = [{ id: id(), slug: "variational-autoencoder", title: "Variational Autoencoder", aliases: ["VAE"], createdAt: now() }];
+      if (p.articleBase && articles.get(p.articleBase.conceptId)?.id !== p.articleBase.revisionId) throw new Error("Article changed; reopen it before editing.");
+      if (!p.articleBase) concepts = [{ id: id(), slug: "variational-autoencoder", title: "Variational Autoencoder", aliases: ["VAE"], createdAt: now() }];
       const commitId = id();
+      const concept = concepts.find((c) => c.id === p.articleBase?.conceptId) ?? concepts[0]!;
+      const previous = articles.get(concept.id);
+      if (previous) previousArticles.set(pid, previous);
+      const change = p.changes.find((c) => c.op === "revise_article");
+      articles.set(concept.id, { id: id(), conceptId: concept.id, version: (previous?.version ?? 0) + 1, summary: change?.summary ?? "A VAE learns a latent distribution.", bodyMd: change?.bodyMd ?? "A VAE encodes and reconstructs data.", commitId, createdAt: now() });
       const out = update(p, { status: "committed", commitId });
       emit({ type: "knowledge_changed", commitId });
       return out;
@@ -126,7 +152,11 @@ export function createFakeClient(): SunsetClient {
       return update(p, { status: "rejected" });
     },
     async undoProposal(pid) {
-      concepts = [];
+      const proposal = find(pid);
+      if (proposal.articleBase) {
+        const previous = previousArticles.get(pid);
+        if (previous) articles.set(proposal.articleBase.conceptId, previous);
+      } else { concepts = []; articles.clear(); }
       const out = update(find(pid), { status: "undone" });
       emit({ type: "knowledge_changed", commitId: id() });
       return out;
@@ -139,7 +169,7 @@ export function createFakeClient(): SunsetClient {
       if (!concept) throw new Error("concept not found");
       const page: ConceptPage = {
         concept,
-        article: null,
+        article: articles.get(cid) ?? null,
         outgoing: [],
         incoming: [],
         overlay: [

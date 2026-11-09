@@ -21,6 +21,7 @@ export const commands = {
 	sendMessage: (sessionId: SessionId | null, text: string) => __TAURI_INVOKE<SendMessageResult>("send_message", { sessionId, text }),
 	listTurns: (sessionId: SessionId) => __TAURI_INVOKE<Turn[]>("list_turns", { sessionId }),
 	pendingProposals: () => __TAURI_INVOKE<Proposal[]>("pending_proposals"),
+	proposeArticleEdit: (conceptId: ConceptId, expectedRevisionId: RevisionId, summary: string, bodyMd: string) => __TAURI_INVOKE<Proposal>("propose_article_edit", { conceptId, expectedRevisionId, summary, bodyMd }),
 	recentProposals: (limit: number) => __TAURI_INVOKE<Proposal[]>("recent_proposals", { limit }),
 	editProposal: (id: ProposalId, edit: ProposalEdit) => __TAURI_INVOKE<Proposal>("edit_proposal", { id, edit }),
 	proposalVersions: (id: ProposalId) => __TAURI_INVOKE<ProposalVersion[]>("proposal_versions", { id }),
@@ -64,6 +65,12 @@ export type AppEvent =
 { type: "knowledge_changed"; commitId: CommitId } | 
 /**  A background job gave up. The tutor answer is unaffected. */
 { type: "job_failed"; jobId: JobId; message: string };
+
+/**  The saved article a learner reviewed before proposing a manual revision. */
+export type ArticleEditBase = {
+	conceptId: ConceptId,
+	revisionId: RevisionId,
+};
 
 /**
  *  One version of a concept's general (shareable) article. Never edited in place: a change is a
@@ -236,6 +243,7 @@ export type Proposal = {
 	/**  Turns the proposal is based on (user question and tutor answer). */
 	evidenceTurnIds: TurnId[],
 	summary: string,
+	articleBase?: ArticleEditBase | null,
 	changes: ProposedChange[],
 	/**  Optimistic concurrency token for edits, approval and rejection. */
 	revision: number,

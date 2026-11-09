@@ -16,6 +16,7 @@ export const tauriClient: SunsetClient = {
   syncVault: commands.syncVault,
   sendMessage: commands.sendMessage,
   listTurns: commands.listTurns,
+  proposeArticleEdit: commands.proposeArticleEdit,
   pendingProposals: commands.pendingProposals,
   recentProposals: commands.recentProposals,
   editProposal: commands.editProposal,

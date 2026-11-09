@@ -257,3 +257,18 @@ pub async fn vault_status(
 pub async fn export_public_to_folder(sunset: State<'_, Sunset>) -> CmdResult<String> {
     sunset.export_public_to_folder().await.map_err(err)
 }
+
+#[tauri::command]
+#[specta::specta]
+pub async fn propose_article_edit(
+    sunset: State<'_, Sunset>,
+    concept_id: ConceptId,
+    expected_revision_id: sunset_core::domain::RevisionId,
+    summary: String,
+    body_md: String,
+) -> CmdResult<Proposal> {
+    sunset
+        .propose_article_edit(concept_id, expected_revision_id, summary, body_md)
+        .await
+        .map_err(err)
+}

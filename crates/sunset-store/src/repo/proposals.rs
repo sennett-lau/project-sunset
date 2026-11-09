@@ -10,7 +10,7 @@ use crate::{Result, codec};
 pub async fn insert(conn: &mut SqliteConnection, user: UserId, p: &Proposal) -> Result<()> {
     sqlx::query(
         "INSERT INTO proposals (id, user_id, session_id, evidence_json, summary, changes_json, \
-         status, commit_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+         status, commit_id, created_at, updated_at, article_base_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(p.id.to_string())
     .bind(user.to_string())
@@ -22,6 +22,7 @@ pub async fn insert(conn: &mut SqliteConnection, user: UserId, p: &Proposal) -> 
     .bind(p.commit_id.map(|c| c.to_string()))
     .bind(p.created_at)
     .bind(p.created_at)
+    .bind(codec::to_json(&p.article_base)?)
     .execute(&mut *conn)
     .await?;
     snapshot(conn, p.id).await?;
@@ -134,9 +135,20 @@ fn from_row(row: &SqliteRow) -> Result<Proposal> {
         evidence_turn_ids: codec::json(row, "evidence_json")?,
         summary: row.try_get("summary")?,
         revision: row.try_get("revision")?,
+        article_base: codec::json(row, "article_base_json")?,
         changes: codec::json(row, "changes_json")?,
         status: codec::from_tag(row, "status")?,
         commit_id: codec::opt_id(row, "commit_id")?,
         created_at: row.try_get("created_at")?,
     })
+}
+
+/// Original proposal associated with a saved revision's commit.
+pub async fn for_commit(conn: &mut SqliteConnection, id: CommitId) -> Result<Option<Proposal>> {
+    sqlx::query("SELECT p.* FROM proposals p JOIN commits c ON c.proposal_id = p.id WHERE c.id = ?")
+        .bind(id.to_string())
+        .fetch_optional(conn)
+        .await?
+        .map(|r| from_row(&r))
+        .transpose()
 }

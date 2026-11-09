@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::{
-    CommitId, ObservationKind, ObservationSource, ProposalId, RelationKind, SessionId, Timestamp,
-    TurnId, VisualPayload,
+    CommitId, ConceptId, ObservationKind, ObservationSource, ProposalId, RelationKind, RevisionId,
+    SessionId, Timestamp, TurnId, VisualPayload,
 };
 
 /// Lifecycle after validation (initial spec Part II §7.4). Candidates that never become
@@ -27,6 +27,8 @@ pub struct Proposal {
     /// Turns the proposal is based on (user question and tutor answer).
     pub evidence_turn_ids: Vec<TurnId>,
     pub summary: String,
+    #[serde(default)]
+    pub article_base: Option<ArticleEditBase>,
     pub changes: Vec<ProposedChange>,
     /// Optimistic concurrency token for edits, approval and rejection.
     pub revision: u32,
@@ -92,4 +94,12 @@ pub enum ProposedChange {
         title: String,
         payload: VisualPayload,
     },
+}
+
+/// The saved article a learner reviewed before proposing a manual revision.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ArticleEditBase {
+    pub concept_id: ConceptId,
+    pub revision_id: RevisionId,
 }

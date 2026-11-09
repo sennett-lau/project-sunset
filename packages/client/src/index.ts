@@ -49,6 +49,7 @@ export interface SunsetClient {
   sendMessage(sessionId: SessionId | null, text: string): Promise<SendMessageResult>;
   listTurns(sessionId: SessionId): Promise<Turn[]>;
 
+  proposeArticleEdit(conceptId: ConceptId, expectedRevisionId: string, summary: string, bodyMd: string): Promise<Proposal>;
   pendingProposals(): Promise<Proposal[]>;
   /** Newest first, any status. */
   recentProposals(limit: number): Promise<Proposal[]>;

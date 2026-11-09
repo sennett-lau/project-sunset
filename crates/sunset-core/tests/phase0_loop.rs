@@ -373,3 +373,97 @@ async fn competing_edit_and_decision_have_exactly_one_winner() {
         }
     }
 }
+
+#[tokio::test]
+async fn saved_article_edits_are_reviewed_version_guarded_and_undoable() {
+    let dir = tempfile::tempdir().unwrap();
+    let app = open(dir.path()).await;
+    let mut rx = app.subscribe();
+    let initial = ask(&app, &mut rx, "What is a VAE?").await;
+    app.approve_proposal(initial.id, initial.revision)
+        .await
+        .unwrap();
+    let concept = app
+        .concepts()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|c| c.slug == "variational-autoencoder")
+        .unwrap();
+    let original = app.concept_page(concept.id).await.unwrap().article.unwrap();
+    app.set_save_mode(SaveMode::Auto).await.unwrap();
+    let edited = app
+        .propose_article_edit(
+            concept.id,
+            original.id,
+            "Learner definition".into(),
+            "Rewritten learner article".into(),
+        )
+        .await
+        .unwrap();
+    let competing = app
+        .propose_article_edit(
+            concept.id,
+            original.id,
+            "Competing definition".into(),
+            "Competing text".into(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(edited.status, ProposalStatus::AwaitingApproval);
+    assert!(edited.evidence_turn_ids.is_empty());
+    assert_eq!(edited.session_id, initial.session_id);
+    assert_eq!(
+        app.concept_page(concept.id)
+            .await
+            .unwrap()
+            .article
+            .unwrap()
+            .id,
+        original.id
+    );
+    drop(app);
+    let app = open(dir.path()).await;
+    app.approve_proposal(edited.id, edited.revision)
+        .await
+        .unwrap();
+    assert!(
+        app.export_public()
+            .await
+            .unwrap()
+            .iter()
+            .any(|f| f.markdown.contains("Rewritten learner article"))
+    );
+    assert!(
+        app.approve_proposal(competing.id, competing.revision)
+            .await
+            .is_err()
+    );
+    assert!(
+        app.propose_article_edit(
+            concept.id,
+            original.id,
+            "Outdated".into(),
+            "Outdated".into()
+        )
+        .await
+        .is_err()
+    );
+    app.undo_proposal(edited.id).await.unwrap();
+    assert_eq!(
+        app.concept_page(concept.id)
+            .await
+            .unwrap()
+            .article
+            .unwrap()
+            .id,
+        original.id
+    );
+    assert!(
+        !app.export_public()
+            .await
+            .unwrap()
+            .iter()
+            .any(|f| f.markdown.contains("Rewritten learner article"))
+    );
+}

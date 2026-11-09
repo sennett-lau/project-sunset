@@ -28,7 +28,9 @@ pub use ids::{
     RevisionId, SessionId, TurnId, UserId,
 };
 pub use observation::{LearningObservation, ObservationKind, ObservationSource};
-pub use proposal::{Proposal, ProposalEdit, ProposalStatus, ProposalVersion, ProposedChange};
+pub use proposal::{
+    ArticleEditBase, Proposal, ProposalEdit, ProposalStatus, ProposalVersion, ProposedChange,
+};
 pub use provider::{
     CapabilityStatus, ModelCapabilities, ModelSettings, ProbeReport, ProviderInput, ProviderKind,
     ProviderProfile, Role, RoleAssignment,

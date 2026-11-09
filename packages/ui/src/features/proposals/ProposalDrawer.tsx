@@ -101,7 +101,8 @@ function ProposalCard({ proposal: p, onOpenConcept }: { proposal: Proposal; onOp
     onError: () => { void query.invalidateQueries({ queryKey: ["proposals"] }); },
   });
   const open = useMutation({ mutationFn: async () => {
-    const slug = p.changes.find((c) => c.op === "upsert_concept")?.slug;
+    const change = p.changes.find((c) => c.op === "upsert_concept" || c.op === "revise_article");
+    const slug = change?.op === "upsert_concept" ? change.slug : change?.op === "revise_article" ? change.concept : undefined;
     const match = (await client.listConcepts()).find((c) => c.slug === slug);
     if (match) onOpenConcept(match.id);
     else throw new Error("This update has no available article.");
@@ -113,7 +114,7 @@ function ProposalCard({ proposal: p, onOpenConcept }: { proposal: Proposal; onOp
         <p className="font-medium">{p.summary}</p>
         <StatusChip status={p.status} />
       </div>
-      <p className="mb-2 text-xs text-stone-500">{p.evidenceTurnIds.length} conversation turns referenced · {new Date(p.createdAt).toLocaleDateString()}</p>
+      <p className="mb-2 text-xs text-stone-500">{p.articleBase ? "Your article edit" : `${p.evidenceTurnIds.length} conversation turns referenced`} · {new Date(p.createdAt).toLocaleDateString()}</p>
       {draft && <>
         <p className="mb-2 text-xs text-stone-500">Your draft is kept while you navigate this workspace. Save edits before quitting the app.</p>
         <ProposalEditor draft={draft} onChange={setDraft} disabled={save.isPending} />
@@ -152,7 +153,7 @@ function ProposalCard({ proposal: p, onOpenConcept }: { proposal: Proposal; onOp
         )}
         {p.status === "committed" && (
           <>
-            {p.changes.some((c) => c.op === "upsert_concept") && <Button disabled={open.isPending} onClick={() => open.mutate()}>Open</Button>}
+            {p.changes.some((c) => c.op === "upsert_concept" || c.op === "revise_article") && <Button disabled={open.isPending} onClick={() => open.mutate()}>Open</Button>}
             <Button disabled={act.isPending} onClick={() => act.mutate("undo")}>
               Undo
             </Button>

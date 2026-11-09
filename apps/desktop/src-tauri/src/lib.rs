@@ -34,6 +34,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             commands::send_message,
             commands::list_turns,
             commands::pending_proposals,
+            commands::propose_article_edit,
             commands::recent_proposals,
             commands::edit_proposal,
             commands::proposal_versions,

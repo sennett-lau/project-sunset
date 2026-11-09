@@ -17,6 +17,7 @@ pub async fn approve(app: &Sunset, id: ProposalId, expected_revision: u32) -> Re
     let mut tx = inner.store.begin().await?;
     let proposal = load(&mut tx, id).await?;
     check_pending_revision(&proposal, expected_revision)?;
+    check_article_base(&mut tx, &proposal).await?;
     let commit = commits::insert(&mut tx, inner.user, id, None).await?;
     if !proposals::transition(
         &mut tx,
@@ -113,6 +114,13 @@ pub async fn edit(app: &Sunset, id: ProposalId, edit: ProposalEdit) -> Result<Pr
     let mut tx = inner.store.begin().await?;
     let original = load(&mut tx, id).await?;
     check_pending_revision(&original, edit.expected_revision)?;
+    check_article_base(&mut tx, &original).await?;
+    if let Some(base) = &original.article_base {
+        let concept = kn::concept(&mut tx, base.concept_id)
+            .await?
+            .ok_or(CoreError::NotFound("concept"))?;
+        check_article_change(&edit.changes, &concept.slug)?;
+    }
     if original.revision == u32::MAX {
         return Err(CoreError::Conflict(
             "proposal has too many revisions".into(),
@@ -299,4 +307,82 @@ async fn resolve(
         })?;
     ids.insert(slug.to_owned(), concept.id);
     Ok(concept.id)
+}
+
+fn check_article_change(changes: &[ProposedChange], slug: &str) -> Result<()> {
+    if matches!(changes, [ProposedChange::ReviseArticle { concept, .. }] if concept == slug) {
+        Ok(())
+    } else {
+        Err(CoreError::Invalid(
+            "an article edit must revise only its original article".into(),
+        ))
+    }
+}
+
+async fn check_article_base(tx: &mut Tx, proposal: &Proposal) -> Result<()> {
+    if let Some(base) = &proposal.article_base {
+        let current = kn::current_revision(tx, base.concept_id).await?;
+        if current.as_ref().map(|r| r.id) != Some(base.revision_id) {
+            return Err(CoreError::Conflict("article changed since this edit was started; reopen the current article and propose a new edit".into()));
+        }
+        let concept = kn::concept(tx, base.concept_id)
+            .await?
+            .ok_or(CoreError::NotFound("concept"))?;
+        check_article_change(&proposal.changes, &concept.slug)?;
+    }
+    Ok(())
+}
+
+pub async fn propose_article_edit(
+    app: &Sunset,
+    concept_id: ConceptId,
+    expected_revision_id: RevisionId,
+    summary: String,
+    body_md: String,
+) -> Result<Proposal> {
+    let _guard = app.inner.knowledge_lock.lock().await;
+    let mut tx = app.inner.store.begin().await?;
+    let concept = kn::concept(&mut tx, concept_id)
+        .await?
+        .ok_or(CoreError::NotFound("concept"))?;
+    let article = kn::current_revision(&mut tx, concept_id)
+        .await?
+        .ok_or(CoreError::NotFound("article"))?;
+    if article.id != expected_revision_id {
+        return Err(CoreError::Conflict("article changed since you opened the editor; reopen the current article before editing".into()));
+    }
+    let source = proposals::for_commit(&mut tx, article.commit_id)
+        .await?
+        .ok_or(CoreError::NotFound("source proposal"))?;
+    let draft = super::curator::ProposalDraft {
+        summary: format!("Edit article: {}", concept.title),
+        changes: vec![ProposedChange::ReviseArticle {
+            concept: concept.slug,
+            summary,
+            body_md,
+        }],
+    };
+    let names = super::validate::NameIndex::new(&kn::live_concepts(&mut tx, app.inner.user).await?);
+    super::validate::draft(&draft, &names).map_err(CoreError::Invalid)?;
+    let proposal = Proposal {
+        id: ProposalId::new(),
+        session_id: source.session_id,
+        evidence_turn_ids: vec![],
+        summary: draft.summary,
+        changes: draft.changes,
+        revision: 0,
+        article_base: Some(sunset_domain::ArticleEditBase {
+            concept_id,
+            revision_id: article.id,
+        }),
+        status: ProposalStatus::AwaitingApproval,
+        commit_id: None,
+        created_at: chrono::Utc::now(),
+    };
+    proposals::insert(&mut tx, app.inner.user, &proposal).await?;
+    tx.commit().await?;
+    app.inner.bus.emit(AppEvent::ProposalCreated {
+        proposal: proposal.clone(),
+    });
+    Ok(proposal)
 }
