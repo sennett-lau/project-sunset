@@ -82,3 +82,18 @@ test("removing all changes prevents saving and cancellation restores the proposa
   expect(drawer.getByRole("button", { name: "Approve" })).toBeTruthy();
   expect(drawer.getByText("Original article text")).toBeTruthy();
 });
+
+test("unsaved edits survive closing and switching inspectors, and cancel clears the retained draft", async () => {
+  const client = await seed();
+  render(<App client={client} productName="Test" />);
+  await openEditor();
+  fireEvent.change(screen.getByRole("textbox", { name: "Update summary" }), { target: { value: "Keep this draft" } });
+  fireEvent.keyDown(document, { key: "Escape" });
+  fireEvent.click(screen.getByRole("button", { name: /Models/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Proposed updates/ }));
+  expect((await screen.findByRole("textbox", { name: "Update summary" }) as HTMLInputElement).value).toBe("Keep this draft");
+  fireEvent.click(screen.getByRole("button", { name: "Cancel editing" }));
+  fireEvent.keyDown(document, { key: "Escape" });
+  await openEditor();
+  expect((screen.getByRole("textbox", { name: "Update summary" }) as HTMLInputElement).value).not.toBe("Keep this draft");
+});

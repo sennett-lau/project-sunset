@@ -1,4 +1,4 @@
-import type { ConceptId, Proposal, ProposalEdit } from "@sunset/client";
+import type { ConceptId, Proposal, ProposalEdit, SunsetClient } from "@sunset/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ButtonHTMLAttributes } from "react";
 import { useClient } from "../../client-context";
@@ -8,6 +8,9 @@ import { Markdown } from "../wiki/Markdown";
 import { Visual } from "../visuals/Visual";
 import { describeChange } from "./describe";
 import { ProposalEditor } from "./ProposalEditor";
+
+// Drafts survive inspector navigation, but stay in memory and scoped to this client/library.
+const drafts = new WeakMap<SunsetClient, Map<string, ProposalEdit>>();
 
 /** Quiet badge: counts pending proposals without taking focus (initial spec Part I §6). */
 export function ProposalBadge({ onClick, expanded }: { onClick: () => void; expanded?: boolean }) {
@@ -65,7 +68,15 @@ export function ProposalDrawer({
 function ProposalCard({ proposal: p, onOpenConcept }: { proposal: Proposal; onOpenConcept: (id: ConceptId) => void }) {
   const client = useClient();
   const query = useQueryClient();
-  const [draft, setDraft] = useState<ProposalEdit | null>(null);
+  const [draft, updateDraft] = useState<ProposalEdit | null>(() => drafts.get(client)?.get(p.id) ?? null);
+  const setDraft = (next: ProposalEdit | null) => {
+    if (next) {
+      let cache = drafts.get(client);
+      if (!cache) { cache = new Map(); drafts.set(client, cache); }
+      cache.set(p.id, next);
+    } else drafts.get(client)?.delete(p.id);
+    updateDraft(next);
+  };
   const [showVersions, setShowVersions] = useState(false);
   const versions = useQuery({ queryKey: ["proposal-versions", p.id, p.revision], queryFn: () => client.proposalVersions(p.id), enabled: showVersions });
   const refreshed = (updated: Proposal) => {
@@ -104,6 +115,7 @@ function ProposalCard({ proposal: p, onOpenConcept }: { proposal: Proposal; onOp
       </div>
       <p className="mb-2 text-xs text-stone-500">{p.evidenceTurnIds.length} conversation turns referenced · {new Date(p.createdAt).toLocaleDateString()}</p>
       {draft && <>
+        <p className="mb-2 text-xs text-stone-500">Your draft is kept while you navigate this workspace. Save edits before quitting the app.</p>
         <ProposalEditor draft={draft} onChange={setDraft} disabled={save.isPending} />
         {stale && <p role="alert" className="mb-2 text-amber-800">This proposal changed while you were editing. Your draft is still shown. Copy any text you want to keep, then cancel editing to review the latest version.</p>}
         {save.error && <p role="alert" className="mb-2 text-red-700">Could not save edits: {String(save.error)} Your draft is kept here.</p>}
